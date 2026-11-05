@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 正式编码完成但发布失败时，仍可从私有临时文件分享。 -->
+    <cache-path name="gif_cache" path="gif_work/" />
+    <external-files-path name="app_pictures" path="Pictures/" />
+</paths>
