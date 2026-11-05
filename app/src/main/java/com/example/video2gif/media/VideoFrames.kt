@@ -11,6 +11,7 @@ import com.example.video2gif.domain.OutputSpec
 import com.example.video2gif.domain.SourceVideo
 import com.example.video2gif.domain.formatBytes
 import com.example.video2gif.domain.sourceTimeMsForFrame
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.ln
 import kotlin.math.max
@@ -68,7 +69,11 @@ object VideoProbe {
                 ?: return null
             val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
                 ?.toIntOrNull() ?: 0
-            val oriented = ImageOps.applyRotation(frame, rotation)
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                ?.toIntOrNull() ?: frame.width
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                ?.toIntOrNull() ?: frame.height
+            val oriented = ImageOps.applySourceRotation(frame, rotation, width, height)
             val long = max(oriented.width, oriented.height)
             if (long <= maxSize) oriented else {
                 val scale = maxSize.toFloat() / long
@@ -128,7 +133,22 @@ class FrameDecoder(private val context: Context, private val uri: Uri) : AutoClo
             } else {
                 retriever.getFrameAtTime(timeMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
             } ?: return null
-            ImageOps.applyRotation(raw, source.rotationDegrees)
+            var oriented = ImageOps.applySourceRotation(
+                raw,
+                source.rotationDegrees,
+                encodedWidth,
+                encodedHeight,
+            )
+            val actualLong = max(oriented.width, oriented.height)
+            if (actualLong > requestLongSide) {
+                val scale = requestLongSide.toFloat() / actualLong
+                oriented = ImageOps.scale(
+                    oriented,
+                    (oriented.width * scale).roundToInt().coerceAtLeast(2),
+                    (oriented.height * scale).roundToInt().coerceAtLeast(2),
+                )
+            }
+            oriented
         } catch (_: Exception) {
             null
         }
@@ -144,6 +164,19 @@ class FrameDecoder(private val context: Context, private val uri: Uri) : AutoClo
 }
 
 object ImageOps {
+    /** 部分 Android 解码器会先应用旋转元数据，按帧宽高避免重复旋转。 */
+    fun applySourceRotation(bitmap: Bitmap, degrees: Int, encodedWidth: Int, encodedHeight: Int): Bitmap {
+        val normalized = ((degrees % 360) + 360) % 360
+        if (normalized == 0 || normalized % 180 != 90) return bitmap
+
+        val encodedRatio = encodedWidth.toFloat() / encodedHeight.coerceAtLeast(1)
+        val displayRatio = 1f / encodedRatio
+        val bitmapRatio = bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1)
+        val encodedError = abs(ln(bitmapRatio / encodedRatio))
+        val displayError = abs(ln(bitmapRatio / displayRatio))
+        return if (displayError + 0.01f < encodedError) bitmap else applyRotation(bitmap, normalized)
+    }
+
     fun applyRotation(bitmap: Bitmap, degrees: Int): Bitmap {
         val normalized = ((degrees % 360) + 360) % 360
         if (normalized == 0) return bitmap
