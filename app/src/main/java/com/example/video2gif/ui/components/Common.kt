@@ -10,7 +10,6 @@ import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,14 +56,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -158,28 +154,22 @@ fun AppTopBar(
 @Composable
 fun GlassPanel(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(28.dp),
-    backdrop: ImageBitmap? = null,
+    shape: Shape = RoundedCornerShape(20.dp),
     content: @Composable () -> Unit,
 ) {
     val extended = AppTheme.extended
     Box(modifier.clip(shape)) {
-        if (backdrop != null) {
-            Image(
-                bitmap = backdrop,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .matchParentSize()
-                    .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(18.dp) else Modifier),
-            )
-            Box(Modifier.matchParentSize().background(extended.glassFill.copy(alpha = 0.88f)))
-        } else {
-            Box(Modifier.matchParentSize().background(extended.glassFill))
-        }
+        Box(Modifier.matchParentSize().background(extended.glassFill))
         Box(
             Modifier
                 .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to extended.glassHighlight.copy(alpha = 0.26f),
+                        0.38f to extended.glassRefraction.copy(alpha = 0.09f),
+                        1f to Color.Transparent,
+                    ),
+                )
                 .border(1.dp, extended.glassBorder, shape),
         )
         Box(
@@ -223,15 +213,26 @@ fun BottomGlassBar(
             Modifier
                 .fillMaxWidth()
                 .clip(shape)
-                .background(extended.glassFill.copy(alpha = 0.97f)),
+                .background(extended.glassFill.copy(alpha = 0.995f)),
         ) {
-        Box(
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f)),
-        )
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to extended.glassHighlight.copy(alpha = 0.18f),
+                            0.16f to extended.glassRefraction.copy(alpha = 0.06f),
+                            1f to Color.Transparent,
+                        ),
+                    ),
+            )
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(extended.glassBorder),
+            )
             Box(
                 Modifier
                     .fillMaxWidth()

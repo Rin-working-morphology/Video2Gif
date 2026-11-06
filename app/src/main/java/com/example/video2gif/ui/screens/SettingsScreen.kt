@@ -133,7 +133,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 InfoRow(
                     icon = Icons.Rounded.Lock,
                     title = "只在设备上处理",
-                    value = "不上传",
+                    value = "",
                     supporting = "视频与成品不会离开这台设备，不需要账号。",
                 )
                 HorizontalDivider(
@@ -143,7 +143,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 InfoRow(
                     icon = Icons.Rounded.Bolt,
                     title = "预览阶段不运行 GIF 编码",
-                    value = "确认后才编码",
+                    value = "",
                     supporting = "预览与估算共用减色、抖动和采样定义，但只有正式转换会写入 GIF。",
                 )
             }
@@ -168,14 +168,6 @@ fun SettingsScreen(vm: AppViewModel) {
             }
 
             Spacer(Modifier.height(24.dp))
-            Text(
-                "本地处理 · 不上传",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-            )
         }
     }
 }

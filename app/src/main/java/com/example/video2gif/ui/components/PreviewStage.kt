@@ -171,7 +171,6 @@ fun MediaStage(
                     .padding(10.dp)
                     .fillMaxWidth()
                     .height(56.dp),
-                backdrop = shownBitmap,
             ) {
                 Row(
                     modifier = Modifier
