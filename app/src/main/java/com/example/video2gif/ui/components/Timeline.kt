@@ -3,6 +3,7 @@ package com.example.video2gif.ui.components
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -29,6 +30,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -106,8 +108,13 @@ fun TrimTimeline(
                     .offset(x = side, y = 0.dp)
                     .width(innerWidth)
                     .height(stripHeight)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                        RoundedCornerShape(12.dp),
+                    )
                     .pointerInput(innerWidthPx, duration) {
                         detectTapGestures { position ->
                             val fraction = (position.x / innerWidthPx).coerceIn(0f, 1f)
@@ -116,7 +123,7 @@ fun TrimTimeline(
                     },
             ) {
                 if (frames.isEmpty()) {
-                    SkeletonBox(Modifier.fillMaxSize(), RoundedCornerShape(10.dp))
+                    SkeletonBox(Modifier.fillMaxSize(), RoundedCornerShape(12.dp))
                 } else {
                     Row(Modifier.fillMaxSize()) {
                         frames.forEach { frame ->
@@ -137,7 +144,7 @@ fun TrimTimeline(
                             .align(Alignment.CenterStart)
                             .width(leftWidth)
                             .fillMaxHeight()
-                            .background(Color.Black.copy(alpha = 0.58f)),
+                            .background(Color(0xFF060F10).copy(alpha = 0.66f)),
                     )
                 }
                 val rightWidth = innerWidth * (1f - endFraction)
@@ -147,16 +154,23 @@ fun TrimTimeline(
                             .align(Alignment.CenterEnd)
                             .width(rightWidth)
                             .fillMaxHeight()
-                            .background(Color.Black.copy(alpha = 0.58f)),
+                            .background(Color(0xFF060F10).copy(alpha = 0.66f)),
                     )
                 }
                 val playheadX = innerWidth * playheadFraction
                 Box(
                     Modifier
-                        .offset(x = playheadX - 1.dp)
-                        .width(2.dp)
+                        .offset(x = playheadX - 1.5.dp)
+                        .width(3.dp)
                         .fillMaxHeight()
-                        .background(Color.White.copy(alpha = 0.9f)),
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    Color.White.copy(alpha = 0.92f),
+                                ),
+                            ),
+                        ),
                 )
             }
 
@@ -260,10 +274,10 @@ private fun TrimHandle(
     ) {
         Box(
             modifier = Modifier
-                .width(6.dp)
+                .width(7.dp)
                 .height(46.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.92f)),
+                .background(Color.White.copy(alpha = 0.94f)),
             contentAlignment = Alignment.Center,
         ) {
             Box(

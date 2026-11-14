@@ -59,6 +59,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.video2gif.domain.RunItem
 import com.example.video2gif.ui.AppViewModel
 import com.example.video2gif.ui.components.AppTopBar
+import com.example.video2gif.ui.components.AuroraBackdrop
+import com.example.video2gif.ui.components.GlassPanel
+import com.example.video2gif.ui.components.Hairline
+import com.example.video2gif.ui.components.Sparkle
+import com.example.video2gif.ui.theme.PanelShape
 import com.example.video2gif.ui.components.BottomGlassBar
 import com.example.video2gif.ui.components.MetaText
 import com.example.video2gif.ui.components.PrimaryAction
@@ -84,11 +89,8 @@ fun ResultScreen(vm: AppViewModel) {
     val bottomPadding = with(LocalDensity.current) { barHeightPx.toDp() } + 12.dp
     val extended = AppTheme.extended
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-    ) {
+    Box(Modifier.fillMaxSize()) {
+        AuroraBackdrop(Modifier.fillMaxSize(), intensity = 0.9f)
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             AppTopBar(
                 title = "结果",
@@ -104,15 +106,27 @@ fun ResultScreen(vm: AppViewModel) {
                     .padding(bottom = bottomPadding),
             ) {
                 Column(Modifier.padding(horizontal = 20.dp)) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        when {
-                            failed.isEmpty() -> "已完成 ${state.succeededCount} 个 GIF"
-                            state.succeededCount == 0 -> "转换未完成"
-                            else -> "完成 ${state.succeededCount} 个，${failed.size} 个未完成"
-                        },
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Sparkle(
+                            sizeDp = 22.dp,
+                            color = if (succeeded.isNotEmpty()) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                            alpha = 0.9f,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            when {
+                                failed.isEmpty() -> "已完成 ${state.succeededCount} 个 GIF"
+                                state.succeededCount == 0 -> "转换未完成"
+                                else -> "完成 ${state.succeededCount} 个，${failed.size} 个未完成"
+                            },
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                    }
                     Spacer(Modifier.height(6.dp))
                     Text(
                         if (succeeded.isNotEmpty()) {
@@ -127,26 +141,24 @@ fun ResultScreen(vm: AppViewModel) {
                 }
 
                 if (succeeded.isNotEmpty()) {
-                    Column(
+                    GlassPanel(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                            .fillMaxWidth(),
+                        shape = PanelShape.card,
                     ) {
-                        succeeded.forEachIndexed { index, item ->
-                            ResultRow(
-                                item = item,
-                                onShare = {
-                                    item.outputUri?.let { shareGif(context, it) }
-                                },
-                                onOpen = { fullscreenUri = item.outputUri },
-                            )
-                            if (index != succeeded.lastIndex) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(start = 92.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant,
+                        Column {
+                            succeeded.forEachIndexed { index, item ->
+                                ResultRow(
+                                    item = item,
+                                    onShare = {
+                                        item.outputUri?.let { shareGif(context, it) }
+                                    },
+                                    onOpen = { fullscreenUri = item.outputUri },
                                 )
+                                if (index != succeeded.lastIndex) {
+                                    Hairline(Modifier.padding(start = 92.dp))
+                                }
                             }
                         }
                     }
@@ -166,8 +178,8 @@ fun ResultScreen(vm: AppViewModel) {
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)),
+                            .clip(PanelShape.card)
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)),
                     ) {
                         failed.forEach { item ->
                             Row(
@@ -245,7 +257,7 @@ fun ResultScreen(vm: AppViewModel) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF080708))
+                    .background(Color(0xFF04090A))
                     .clickable { fullscreenUri = null },
                 contentAlignment = Alignment.Center,
             ) {
@@ -331,7 +343,7 @@ fun GifImage(uriString: String, targetPx: Int, modifier: Modifier = Modifier) {
         factory = { ctx ->
             ImageView(ctx).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                setBackgroundColor(0xFF0E0B0D.toInt())
+                setBackgroundColor(0xFF04090A.toInt())
             }
         },
         update = { view ->

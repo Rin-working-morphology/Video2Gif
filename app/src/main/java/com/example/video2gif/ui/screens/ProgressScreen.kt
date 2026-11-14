@@ -2,6 +2,7 @@ package com.example.video2gif.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +62,11 @@ import com.example.video2gif.domain.RunState
 import com.example.video2gif.domain.formatBytes
 import com.example.video2gif.ui.AppViewModel
 import com.example.video2gif.ui.components.AppTopBar
+import com.example.video2gif.ui.components.AuroraBackdrop
+import com.example.video2gif.ui.components.GlassPanel
+import com.example.video2gif.ui.components.DiamondMark
+import com.example.video2gif.ui.components.Hairline
+import com.example.video2gif.ui.theme.PanelShape
 import com.example.video2gif.ui.components.BottomGlassBar
 import com.example.video2gif.ui.components.MetaText
 import com.example.video2gif.ui.components.PrimaryAction
@@ -85,11 +94,8 @@ fun ProgressScreen(vm: AppViewModel) {
     val finished = !state.isRunning
     val activeItem = state.currentItem
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-    ) {
+    Box(Modifier.fillMaxSize()) {
+        AuroraBackdrop(Modifier.fillMaxSize(), intensity = 0.9f)
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             AppTopBar(
                 title = if (finished) "转换结果" else "正在转换",
@@ -105,42 +111,38 @@ fun ProgressScreen(vm: AppViewModel) {
                     .padding(bottom = bottomPadding),
             ) {
                 Column(Modifier.padding(horizontal = 20.dp)) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            if (finished) {
-                                if (state.failedCount > 0) {
-                                    "完成 ${state.succeededCount} 个，失败 ${state.failedCount} 个"
-                                } else {
-                                    "已完成 ${state.succeededCount} 个"
-                                }
+                    Spacer(Modifier.height(6.dp))
+                    ProgressDial(
+                        progress = overall,
+                        finished = finished,
+                        succeeded = state.succeededCount,
+                        total = state.items.size,
+                        failed = state.failedCount,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        if (finished) {
+                            if (state.failedCount > 0) {
+                                "完成 ${state.succeededCount} 个，失败 ${state.failedCount} 个"
                             } else {
-                                "正在处理第 ${(state.currentIndex + 1).coerceAtLeast(1)} 个"
-                            },
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            "${(overall * 100).toInt()}%",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontFeatureSettings = "tnum",
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    LinearProgressIndicator(
-                        progress = { overall },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(CircleShape),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                "已完成 ${state.succeededCount} 个"
+                            }
+                        } else {
+                            "正在处理第 ${(state.currentIndex + 1).coerceAtLeast(1)} 个 · " +
+                                (state.currentItem?.name ?: "准备中")
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
                         StatusPill(
                             "成功 ${state.succeededCount}",
                             container = extended.successContainer,
@@ -148,6 +150,7 @@ fun ProgressScreen(vm: AppViewModel) {
                             icon = Icons.Rounded.CheckCircle,
                         )
                         if (state.failedCount > 0) {
+                            Spacer(Modifier.width(6.dp))
                             StatusPill(
                                 "失败 ${state.failedCount}",
                                 container = MaterialTheme.colorScheme.errorContainer,
@@ -156,6 +159,7 @@ fun ProgressScreen(vm: AppViewModel) {
                             )
                         }
                         if (state.canceledCount > 0) {
+                            Spacer(Modifier.width(6.dp))
                             StatusPill(
                                 "取消 ${state.canceledCount}",
                                 container = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -164,6 +168,7 @@ fun ProgressScreen(vm: AppViewModel) {
                             )
                         }
                         if (state.interruptedCount > 0) {
+                            Spacer(Modifier.width(6.dp))
                             StatusPill(
                                 "中断 ${state.interruptedCount}",
                                 container = extended.warningContainer,
@@ -173,39 +178,47 @@ fun ProgressScreen(vm: AppViewModel) {
                         }
                     }
                     if (state.stopReason != null && finished) {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(10.dp))
                         Text(
                             state.stopReason,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(18.dp))
                 }
 
-                Column(
+                GlassPanel(
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                        .fillMaxWidth(),
+                    shape = PanelShape.card,
                 ) {
-                    state.items.forEachIndexed { index, item ->
-                        ProgressRow(item = item, isCurrent = index == state.currentIndex)
-                        if (index != state.items.lastIndex) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 64.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
+                    Column {
+                        state.items.forEachIndexed { index, item ->
+                            ProgressRow(item = item, isCurrent = index == state.currentIndex)
+                            if (index != state.items.lastIndex) {
+                                Hairline(Modifier.padding(start = 64.dp))
+                            }
                         }
                     }
                 }
-                if (finished) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DiamondMark(color = MaterialTheme.colorScheme.primary, markSize = 4.dp)
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        "转换结束后可直接分享。GIF 不包含声音。",
-                        style = MaterialTheme.typography.bodySmall,
+                        if (finished) {
+                            "转换结束后可直接分享。GIF 不包含声音。"
+                        } else {
+                            "离开这个页面不会中断转换，系统通知里也能看到进度。"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                     )
                 }
             }
@@ -269,6 +282,114 @@ fun ProgressScreen(vm: AppViewModel) {
                 TextButton(onClick = { confirmCancelAll = false }) { Text("继续转换") }
             },
         )
+    }
+}
+
+
+/** 圆环进度：薄荷渐变弧 + 中心大号百分比。完成时补一圈静态光环。 */
+@Composable
+private fun ProgressDial(
+    progress: Float,
+    finished: Boolean,
+    succeeded: Int,
+    total: Int,
+    failed: Int,
+) {
+    val extended = AppTheme.extended
+    val scheme = MaterialTheme.colorScheme
+    val dialSize = 176.dp
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(dialSize + 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(dialSize)) {
+            val stroke = 9.dp.toPx()
+            val inset = stroke / 2f + 2.dp.toPx()
+            val arcSize = androidx.compose.ui.geometry.Size(
+                size.width - inset * 2,
+                size.height - inset * 2,
+            )
+            // 轨道
+            drawArc(
+                color = scheme.outlineVariant.copy(alpha = 0.85f),
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = arcSize,
+                style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+            )
+            // 外发光：更宽更淡，代替投影
+            if (progress > 0.01f) {
+                drawArc(
+                    color = scheme.primary.copy(alpha = 0.16f),
+                    startAngle = -90f,
+                    sweepAngle = 360f * progress,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = arcSize,
+                    style = Stroke(
+                        width = stroke * 2.1f,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    ),
+                )
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        colors = listOf(
+                            scheme.primary.copy(alpha = 0.35f),
+                            scheme.primary,
+                            scheme.tertiary,
+                        ),
+                    ),
+                    startAngle = -90f,
+                    sweepAngle = 360f * progress,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = arcSize,
+                    style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                )
+            }
+            // 内圈细线，呼应首页光圈；不做刻度点，避免和进度弧抢注意力。
+            drawCircle(
+                color = extended.ornament.copy(alpha = 0.10f),
+                radius = size.minDimension / 2f - stroke - 7.dp.toPx(),
+                style = Stroke(width = 1.dp.toPx()),
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    "${(progress * 100).toInt()}",
+                    style = MaterialTheme.typography.displayMedium.copy(
+                        fontFeatureSettings = "tnum",
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    color = scheme.onSurface,
+                )
+                Text(
+                    "%",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            Text(
+                if (finished) "已完成 $succeeded / $total"
+                else "已完成 ${(progress * total).toInt()} / $total",
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.onSurfaceVariant,
+            )
+            if (failed > 0) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "失败 $failed",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.error,
+                )
+            }
+        }
     }
 }
 

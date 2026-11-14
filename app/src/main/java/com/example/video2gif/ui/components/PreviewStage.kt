@@ -27,7 +27,6 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,7 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
@@ -74,7 +75,7 @@ fun MediaStage(
     }
     val stageRatio = ratio.coerceIn(0.68f, 1.9f)
     val extended = AppTheme.extended
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(18.dp)
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val stageHeight = (maxWidth / stageRatio)
             .coerceAtMost(maxStageHeight)
@@ -85,7 +86,16 @@ fun MediaStage(
                 .height(stageHeight)
                 .clip(shape)
                 .background(extended.mediaStage)
-                .border(1.dp, extended.mediaStageBorder, shape),
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            extended.glassBorder,
+                            extended.glassBorder.copy(alpha = extended.glassBorder.alpha * 0.4f),
+                        ),
+                    ),
+                    shape = shape,
+                ),
         ) {
             val rawBitmap = remember(frame?.raw) { frame?.raw?.asImageBitmap() }
             val processedBitmap = remember(frame?.processed) { frame?.processed?.asImageBitmap() }
@@ -124,7 +134,7 @@ fun MediaStage(
                     Text(
                         error ?: "正在准备预览",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFB5AFB3),
+                        color = MediaGlassText.copy(alpha = 0.75f),
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 32.dp),
                     )
@@ -132,18 +142,25 @@ fun MediaStage(
             }
 
             if (loading && shownBitmap != null) {
-                LinearProgressIndicator(
-                    modifier = Modifier
+                Box(
+                    Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .height(2.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = Color.Transparent,
+                        .height(2.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.primary,
+                                    Color.Transparent,
+                                ),
+                            ),
+                        ),
                 )
             }
 
             if (frame?.previewDownscaled == true) {
-                GlassPanel(
+                MediaGlassSurface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(10.dp)
@@ -159,13 +176,13 @@ fun MediaStage(
                         Text(
                             "预览已降分辨率",
                             style = MaterialTheme.typography.labelMedium,
-                            color = extended.glassText,
+                            color = MediaGlassText,
                         )
                     }
                 }
             }
 
-            GlassPanel(
+            MediaGlassSurface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(10.dp)
@@ -209,7 +226,7 @@ fun MediaStage(
                             fontFeatureSettings = "tnum",
                             fontWeight = FontWeight.Medium,
                         ),
-                        color = extended.glassText,
+                        color = MediaGlassText,
                     )
                     Spacer(Modifier.width(4.dp))
                 }
@@ -224,11 +241,10 @@ private fun GlassPreviewToggle(
     onSelectOriginal: () -> Unit,
     onSelectEffect: () -> Unit,
 ) {
-    val extended = AppTheme.extended
     Row(
         modifier = Modifier
             .clip(CircleShape)
-            .background(extended.glassBorder.copy(alpha = 0.35f))
+            .background(Color.White.copy(alpha = 0.10f))
             .padding(2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -239,7 +255,6 @@ private fun GlassPreviewToggle(
 
 @Composable
 private fun ToggleItem(text: String, selected: Boolean, onClick: () -> Unit) {
-    val extended = AppTheme.extended
     Box(
         modifier = Modifier
             .width(56.dp)
@@ -253,7 +268,33 @@ private fun ToggleItem(text: String, selected: Boolean, onClick: () -> Unit) {
             text,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary else extended.glassText,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MediaGlassText,
         )
+    }
+}
+
+/** 媒体控件固定使用深色玻璃：视频内容明暗不可控，浅色主题下也不应铺白色。 */
+private val MediaGlassText = Color(0xFFEFF5F5)
+
+@Composable
+private fun MediaGlassSurface(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(20.dp),
+    content: @Composable () -> Unit,
+) {
+    Box(modifier.clip(shape)) {
+        Box(Modifier.matchParentSize().background(Color(0xD10A1416)))
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.White.copy(alpha = 0.10f),
+                        0.5f to Color.Transparent,
+                    ),
+                ),
+        )
+        Box(Modifier.matchParentSize().border(1.dp, Color.White.copy(alpha = 0.20f), shape))
+        content()
     }
 }

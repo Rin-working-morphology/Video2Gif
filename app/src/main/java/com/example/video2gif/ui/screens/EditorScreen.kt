@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -57,6 +58,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -85,6 +88,11 @@ import com.example.video2gif.domain.outputSpec
 import com.example.video2gif.ui.AppViewModel
 import com.example.video2gif.ui.Screen
 import com.example.video2gif.ui.components.AppTopBar
+import com.example.video2gif.ui.components.AuroraBackdrop
+import com.example.video2gif.ui.components.DiamondMark
+import com.example.video2gif.ui.components.GlassPanel
+import com.example.video2gif.ui.components.HaloGlow
+import com.example.video2gif.ui.components.IconGlassButton
 import com.example.video2gif.ui.components.BottomGlassBar
 import com.example.video2gif.ui.components.CropEditorSheet
 import com.example.video2gif.ui.components.Hairline
@@ -105,6 +113,8 @@ import com.example.video2gif.ui.components.TrimTimeline
 import com.example.video2gif.ui.components.rememberReducedMotion
 import com.example.video2gif.ui.components.rememberStartWithNotifications
 import com.example.video2gif.ui.theme.AppTheme
+import com.example.video2gif.ui.theme.Motion
+import com.example.video2gif.ui.theme.PanelShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,19 +164,16 @@ fun EditorScreen(vm: AppViewModel) {
     }
 
     CompositionLocalProvider(LocalReducedMotion provides reducedMotion) {
-        BoxWithConstraints(
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-        ) {
+        AuroraBackdrop(Modifier.fillMaxSize(), intensity = 0.8f)
+        BoxWithConstraints(Modifier.fillMaxSize()) {
             // 宽窗口（平板或横屏）切为左侧预览、右侧参数；预览高度服从可用高度。
             val wide = maxWidth >= 720.dp
             var barHeightPx by remember { mutableStateOf(0) }
             val bottomPadding = with(LocalDensity.current) { barHeightPx.toDp() } + 16.dp
             val stageMaxHeight = if (wide) {
-                minOf(300.dp, maxHeight * 0.42f)
+                minOf(280.dp, maxHeight * 0.38f)
             } else {
-                minOf(420.dp, maxHeight * 0.45f)
+                minOf(376.dp, maxHeight * 0.40f)
             }
 
             Column(Modifier.fillMaxSize()) {
@@ -179,20 +186,21 @@ fun EditorScreen(vm: AppViewModel) {
                     },
                     onBack = { vm.back() },
                     actions = {
-                        IconButton(
+                        IconGlassButton(
+                            icon = Icons.Rounded.Settings,
+                            contentDescription = "设置",
                             onClick = { vm.navigate(Screen.Settings) },
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Icon(
-                                Icons.Rounded.Settings,
-                                contentDescription = "设置",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
+                        )
                     },
                 )
                 if (wide) {
-                    Row(Modifier.weight(1f)) {
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .widthIn(max = 1320.dp)
+                            .align(Alignment.CenterHorizontally),
+                    ) {
                         Column(
                             Modifier
                                 .weight(1.12f)
@@ -212,9 +220,19 @@ fun EditorScreen(vm: AppViewModel) {
                                 onAdd = openPicker,
                             )
                         }
-                        VerticalDivider(
-                            modifier = Modifier.fillMaxHeight(),
-                            color = MaterialTheme.colorScheme.outlineVariant,
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .width(1.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.Transparent,
+                                            MaterialTheme.colorScheme.outlineVariant,
+                                            Color.Transparent,
+                                        ),
+                                    ),
+                                ),
                         )
                         Column(
                             Modifier
@@ -444,7 +462,14 @@ private fun EditorMediaPane(
     onAdd: () -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
-        MediaStage(
+        Box {
+            HaloGlow(
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                strength = 0.16f,
+            )
+            MediaStage(
             spec = spec,
             frame = vm.preview,
             loading = vm.previewLoading,
@@ -454,9 +479,11 @@ private fun EditorMediaPane(
             timecode = formatTimecode(vm.playheadMs),
             onToggleOriginal = vm::toggleOriginal,
             onTogglePlay = vm::togglePlayback,
-            modifier = Modifier.padding(vertical = 8.dp),
-            maxStageHeight = stageMaxHeight,
-        )
+                modifier = Modifier.padding(vertical = 8.dp),
+                maxStageHeight = stageMaxHeight,
+            )
+        }
+        Spacer(Modifier.height(10.dp))
         TrimTimeline(
             frames = frames,
             durationMs = source.durationMs,
@@ -481,18 +508,21 @@ private fun EditorMediaPane(
         }
         if (runRunning) {
             Spacer(Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-            ) {
-                Text(
-                    "已有转换任务进行中，当前调整不会影响已开始的任务。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
+            GlassPanel(shape = PanelShape.card) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DiamondMark()
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "已有转换任务进行中，当前调整不会影响已开始的任务。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -500,26 +530,26 @@ private fun EditorMediaPane(
 
 @Composable
 private fun BatchNote() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Rounded.Info,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            "修改仅作用于当前视频；统一参数在批次页设置。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    GlassPanel(shape = PanelShape.card) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Rounded.Info,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "修改仅作用于当前视频；统一参数在批次页设置。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -540,7 +570,7 @@ private fun EditorParametersPane(
     reducedMotion: Boolean = false,
 ) {
     Column(modifier) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(18.dp))
         val preset = QualityPreset.from(item.recipe.colorCount, item.recipe.dither)
         SectionTitle(
             "画质",
@@ -571,71 +601,84 @@ private fun EditorParametersPane(
             modifier = Modifier.padding(start = 4.dp, top = 8.dp),
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(22.dp))
         SectionTitle("输出")
-        Spacer(Modifier.height(4.dp))
-        ParameterRow(
-            title = "每秒帧数",
-            value = "${item.recipe.fps} fps",
-            supporting = spec?.let { "约 ${it.frameCount} 帧" },
-            onClick = onOpenFps,
-        )
-        Hairline()
-        ParameterRow(
-            title = "尺寸",
-            value = "长边 ${item.recipe.longSide}",
-            supporting = spec?.let { formatResolution(it.width, it.height) },
-            onClick = onOpenSize,
-        )
-        Hairline()
-        ParameterRow(
-            title = "裁剪与旋转",
-            value = cropLabel(item),
-            supporting = "调整取景框与画面方向",
-            onClick = onOpenCrop,
-        )
+        Spacer(Modifier.height(8.dp))
+        GlassPanel(shape = PanelShape.card) {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                ParameterRow(
+                    title = "每秒帧数",
+                    value = "${item.recipe.fps} fps",
+                    supporting = spec?.let { "约 ${it.frameCount} 帧" },
+                    onClick = onOpenFps,
+                )
+                Hairline()
+                ParameterRow(
+                    title = "尺寸",
+                    value = "长边 ${item.recipe.longSide}",
+                    supporting = spec?.let { formatResolution(it.width, it.height) },
+                    onClick = onOpenSize,
+                )
+                Hairline()
+                ParameterRow(
+                    title = "裁剪与旋转",
+                    value = cropLabel(item),
+                    supporting = "调整取景框与画面方向",
+                    onClick = onOpenCrop,
+                )
+            }
+        }
 
-        Spacer(Modifier.height(12.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .clickable(onClick = onToggleAdvanced)
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "高级设置",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            val rotation by animateFloatAsState(
-                targetValue = if (advancedOpen) 180f else 0f,
-                animationSpec = tween(if (reducedMotion) 0 else 180),
-                label = "advancedChevron",
-            )
-            Icon(
-                Icons.Rounded.ExpandMore,
-                contentDescription = if (advancedOpen) "收起高级设置" else "展开高级设置",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.rotate(rotation),
-            )
+        Spacer(Modifier.height(14.dp))
+        GlassPanel(shape = PanelShape.card) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(PanelShape.card)
+                    .clickable(onClick = onToggleAdvanced)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "高级设置",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    if (advancedOpen) "收起" else "速度、循环、调色板",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(4.dp))
+                val rotation by animateFloatAsState(
+                    targetValue = if (advancedOpen) 180f else 0f,
+                    animationSpec = tween(if (reducedMotion) 0 else 180, easing = Motion.EaseOutQuart),
+                    label = "advancedChevron",
+                )
+                Icon(
+                    Icons.Rounded.ExpandMore,
+                    contentDescription = if (advancedOpen) "收起高级设置" else "展开高级设置",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.rotate(rotation),
+                )
+            }
         }
         AnimatedVisibility(
             visible = advancedOpen,
             enter = fadeIn(tween(if (reducedMotion) 0 else 180)) +
-                expandVertically(tween(if (reducedMotion) 0 else 200)),
+                expandVertically(tween(if (reducedMotion) 0 else 220, easing = Motion.EaseOutQuart)),
             exit = fadeOut(tween(if (reducedMotion) 0 else 140)) +
                 shrinkVertically(tween(if (reducedMotion) 0 else 180)),
         ) {
             Column {
+                Spacer(Modifier.height(16.dp))
                 Text(
                     "播放速度",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
                 )
-                Spacer(Modifier.height(8.dp))
                 SegmentedOptions(
                     options = listOf(0.5f, 1f, 1.5f, 2f).map {
                         SegmentOption(it, formatSpeed(it))
@@ -649,30 +692,34 @@ private fun EditorParametersPane(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp, top = 6.dp),
                 )
-                Spacer(Modifier.height(8.dp))
-                ParameterRow(
-                    title = "循环",
-                    value = formatLoop(item.recipe.loop, item.recipe.loopCount),
-                    supporting = "部分播放器会忽略有限循环",
-                    onClick = onOpenLoop,
-                )
-                Hairline()
-                ParameterRow(
-                    title = "颜色数量",
-                    value = "${item.recipe.colorCount} 色",
-                    supporting = "GIF 全局调色板容量",
-                    onClick = onOpenColors,
-                )
-                Hairline()
-                ParameterRow(
-                    title = "抖动",
-                    value = ditherLabel(item.recipe.dither),
-                    supporting = "有序抖动，结果稳定可复现",
-                    onClick = onOpenDither,
-                )
+                Spacer(Modifier.height(12.dp))
+                GlassPanel(shape = PanelShape.card) {
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        ParameterRow(
+                            title = "循环",
+                            value = formatLoop(item.recipe.loop, item.recipe.loopCount),
+                            supporting = "部分播放器会忽略有限循环",
+                            onClick = onOpenLoop,
+                        )
+                        Hairline()
+                        ParameterRow(
+                            title = "颜色数量",
+                            value = "${item.recipe.colorCount} 色",
+                            supporting = "GIF 全局调色板容量",
+                            onClick = onOpenColors,
+                        )
+                        Hairline()
+                        ParameterRow(
+                            title = "抖动",
+                            value = ditherLabel(item.recipe.dither),
+                            supporting = "有序抖动，结果稳定可复现",
+                            onClick = onOpenDither,
+                        )
+                    }
+                }
             }
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(28.dp))
     }
 }
 

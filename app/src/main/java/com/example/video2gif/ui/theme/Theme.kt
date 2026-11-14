@@ -12,11 +12,15 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.example.video2gif.domain.ThemeMode
+
+/** 当前是否深色主题。氛围层据此决定极光与装饰的强度。 */
+val LocalAppDark = staticCompositionLocalOf { false }
 
 private val LightScheme = lightColorScheme(
     primary = LightPalette.primary,
@@ -116,7 +120,9 @@ fun Video2GifTheme(
         darkTheme -> DarkScheme
         else -> LightScheme
     }
-    val extended = if (darkTheme) DarkExtendedColors else LightExtendedColors
+    val base = if (darkTheme) DarkExtendedColors else LightExtendedColors
+    // 动态取色时极光层跟随壁纸主色；关闭时保持固定品牌薄荷色。
+    val extended = if (useDynamic) base.harmonizeWith(colorScheme.primary) else base
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -128,10 +134,14 @@ fun Video2GifTheme(
         }
     }
 
-    CompositionLocalProvider(LocalExtendedColors provides extended) {
+    CompositionLocalProvider(
+        LocalExtendedColors provides extended,
+        LocalAppDark provides darkTheme,
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = AppTypography,
+            shapes = AppShapes,
         ) {
             // MaterialTheme 本身不设置默认内容色；没有 Surface 包裹的 Text 会落到黑色，
             // 在深色主题下不可读。这里统一提供 onBackground。
@@ -146,6 +156,9 @@ fun Video2GifTheme(
 object AppTheme {
     val extended: ExtendedColors
         @Composable get() = LocalExtendedColors.current
+
+    val isDark: Boolean
+        @Composable get() = LocalAppDark.current
 
     /** 黑底媒体舞台上始终使用的深色遮罩，避免视频内容与系统栏互相干扰。 */
     val mediaScrim = Color(0xFF000000)

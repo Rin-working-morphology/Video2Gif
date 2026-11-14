@@ -2,6 +2,7 @@ package com.example.video2gif.ui.screens
 
 import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,11 +32,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.video2gif.domain.ThemeMode
 import com.example.video2gif.ui.AppViewModel
 import com.example.video2gif.ui.components.AppTopBar
+import com.example.video2gif.ui.components.AuroraBackdrop
+import com.example.video2gif.ui.components.GlassPanel
+import com.example.video2gif.ui.components.Hairline
+import com.example.video2gif.ui.theme.PanelShape
 import com.example.video2gif.ui.components.SegmentOption
 import com.example.video2gif.ui.components.SegmentedOptions
 import com.example.video2gif.ui.theme.AppTheme
@@ -49,10 +55,10 @@ fun SettingsScreen(vm: AppViewModel) {
     }.getOrNull() ?: "1.0"
     val extended = AppTheme.extended
 
+    Box(Modifier.fillMaxSize()) {
+    AuroraBackdrop(Modifier.fillMaxSize(), intensity = 0.85f)
     Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         AppTopBar(title = "设置", onBack = { vm.back() })
@@ -83,10 +89,7 @@ fun SettingsScreen(vm: AppViewModel) {
                     )
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    )
+                    Hairline(Modifier.padding(start = 16.dp))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -136,10 +139,7 @@ fun SettingsScreen(vm: AppViewModel) {
                     value = "",
                     supporting = "视频与成品不会离开这台设备，不需要账号。",
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 56.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                )
+                Hairline(Modifier.padding(start = 56.dp))
                 InfoRow(
                     icon = Icons.Rounded.Bolt,
                     title = "预览阶段不运行 GIF 编码",
@@ -170,6 +170,7 @@ fun SettingsScreen(vm: AppViewModel) {
             Spacer(Modifier.height(24.dp))
         }
     }
+    }
 }
 
 @Composable
@@ -184,13 +185,8 @@ private fun SettingsGroup(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
-        ) {
-            content()
+        GlassPanel(Modifier.fillMaxWidth(), shape = PanelShape.card) {
+            Column { content() }
         }
     }
 }
@@ -211,12 +207,19 @@ private fun InfoRow(
         Icon(
             icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
         )
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (value.isNotBlank()) {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             if (supporting != null) {
                 Text(
                     supporting,
@@ -225,11 +228,5 @@ private fun InfoRow(
                 )
             }
         }
-        Spacer(Modifier.width(12.dp))
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

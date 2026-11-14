@@ -2,9 +2,9 @@
 
 把手机视频转成无声 GIF 的安卓应用。先预览效果、估算体积，确认后才开始编码；所有处理在设备上完成，不需要账号或上传。
 
-界面为 Jetpack Compose + Material 3，设计依据见 [DESIGN.md](DESIGN.md)，产品与技术约束见 [PRODUCT.md](PRODUCT.md) 与 [ARCHITECTURE.md](ARCHITECTURE.md)。当前实现状态、偏差与验收证据见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+界面为 Jetpack Compose + Material 3，视觉语言是「极光石墨 + 玻璃主卡片」：近黑青灰底、薄荷极光、竖向玻璃主卡片与几何装饰线。设计依据见 [DESIGN.md](DESIGN.md)，产品与技术约束见 [PRODUCT.md](PRODUCT.md) 与 [ARCHITECTURE.md](ARCHITECTURE.md)。当前实现状态、偏差与验收证据见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
-<img src="docs/screenshots/home-empty.png" width="240" alt="首页空状态"/> <img src="docs/screenshots/editor.png" width="240" alt="调整工作区"/> <img src="docs/screenshots/batch.png" width="240" alt="批次汇总"/>
+<img src="docs/screenshots/home-dark.jpg" width="240" alt="首页空状态（深色）"/> <img src="docs/screenshots/editor-dark.jpg" width="240" alt="调整工作区"/> <img src="docs/screenshots/batch-dark.jpg" width="240" alt="批次汇总"/>
 
 ## 已实现
 
@@ -19,17 +19,17 @@
 
 ## 截图
 
-| 调整（深色） | 裁剪与旋转 | 结果 |
-|---|---|---|
-| <img src="docs/screenshots/editor-dark.png" width="240"/> | <img src="docs/screenshots/crop.png" width="240"/> | <img src="docs/screenshots/result.png" width="240"/> |
+| 调整（深色） | 调整（浅色） | 转换进度 |
+|---|---|---|---|
+| <img src="docs/screenshots/editor-dark.jpg" width="240"/> | <img src="docs/screenshots/editor-light.jpg" width="240"/> | <img src="docs/screenshots/progress-dark.jpg" width="240"/> |
 
-| 横屏右侧参数 | 平板首页 | 设置（深色） |
+| 结果 | 设置（深色） | 首页（浅色） |
 |---|---|---|
-| <img src="docs/screenshots/landscape-two-pane.png" width="360"/> | <img src="docs/screenshots/tablet-home.png" width="240"/> | <img src="docs/screenshots/settings-dark.png" width="240"/> |
+| <img src="docs/screenshots/result-dark.jpg" width="240"/> | <img src="docs/screenshots/settings-dark.jpg" width="240"/> | <img src="docs/screenshots/home-light.jpg" width="240"/> |
 
 ## 构建
 
-环境：JDK 17、Android SDK 37、Gradle Wrapper 9.6.0、AGP 9.5.0、Kotlin 2.2.10。`minSdk = 24`、`compileSdk/targetSdk = 37`。
+环境：JDK 25、Android SDK 37、Gradle Wrapper 9.6.0、AGP 9.5.0、Kotlin 2.2.10（本次构建使用 Android Studio 自带 JBR 25，可用 `JAVA_HOME=/opt/android-studio/jbr ./gradlew ...`）。`minSdk = 24`、`compileSdk/targetSdk = 37`。
 
 ```bash
 ./gradlew :app:assembleDebug

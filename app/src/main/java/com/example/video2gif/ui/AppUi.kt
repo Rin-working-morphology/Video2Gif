@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -12,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -23,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.video2gif.ui.components.LocalReducedMotion
 import com.example.video2gif.ui.components.rememberReducedMotion
+import com.example.video2gif.ui.theme.Motion
+import com.example.video2gif.ui.theme.PanelShape
 import com.example.video2gif.ui.screens.BatchScreen
 import com.example.video2gif.ui.screens.EditorScreen
 import com.example.video2gif.ui.screens.HomeScreen
@@ -53,8 +58,13 @@ fun Video2GifAppUi(vm: AppViewModel) {
             AnimatedContent(
                 targetState = vm.screen,
                 transitionSpec = {
-                    fadeIn(tween(if (reducedMotion) 0 else 180)) togetherWith
-                        fadeOut(tween(if (reducedMotion) 0 else 120))
+                    // 进入页面轻微上浮，退出只淡出：方向感明确，又不让用户等待。
+                    (fadeIn(tween(if (reducedMotion) 0 else 220, easing = Motion.EaseOutQuart)) +
+                        slideInVertically(
+                            animationSpec = tween(if (reducedMotion) 0 else 320, easing = Motion.EaseOutQuint),
+                            initialOffsetY = { it / 26 },
+                        )) togetherWith
+                        fadeOut(tween(if (reducedMotion) 0 else 140))
                 },
                 label = "screenTransition",
             ) { screen ->
@@ -73,7 +83,16 @@ fun Video2GifAppUi(vm: AppViewModel) {
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 96.dp, start = 16.dp, end = 16.dp),
-            )
+            ) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = PanelShape.pill,
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                    actionColor = MaterialTheme.colorScheme.inversePrimary,
+                    dismissActionContentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                )
+            }
         }
     }
 }

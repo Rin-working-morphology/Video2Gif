@@ -130,3 +130,51 @@ Wu 量化使用 33³ 累积矩、按方差×像素数优先分裂。预览 Bitma
 3. 做取消、磁盘不足、保存失败、FGS 超时、进程死亡注入测试；补 Room 或完善 JSON 任务的版本迁移。
 4. 提取字符串、补 i18n；完成 TalkBack 与 200% 字体全流程；补 10/11 项与云端媒体边界。
 5. 在决定是否发布前单独评估原生 giflib 或更快的编码实现，并记录 ABI/16KB 页/许可证结论。
+
+## 7. 2026-11-14 视觉改造
+
+本轮按用户提供的参考图重做视觉层，功能与数据流未改动。目标是「极光石墨 + 玻璃主卡片」：
+近黑青灰底、顶部与底部薄荷极光、竖向玻璃主卡片、几何装饰（胶片条、点阵、棋盘短条、星芒、轨道线）。
+
+### 7.1 改动范围
+
+| 文件 | 内容 |
+|---|---|
+| `ui/theme/Color.kt` | 全部色板改为 OKLCH 推导的 sRGB；新增极光/装饰/玻璃语义色；动态取色时用 `harmonizeWith()` 让极光跟随壁纸主色。 |
+| `ui/theme/Theme.kt` | 接入 `AppShapes`，新增 `LocalAppDark`，供氛围层判断明暗。 |
+| `ui/theme/Shape.kt` / `Motion.kt` | 新增形状梯度与动效常量（时长、指数缓出曲线）。 |
+| `ui/components/Atmosphere.kt` | 新增：极光背景、柔光、星芒、点阵、棋盘条、胶片条、轨道线、入场位移。 |
+| `ui/components/Common.kt` | 玻璃面板改为「底色 + 高光 + 渐变边 + 薄荷内侧染色 + 顶边高光」；主按钮改为薄荷渐变胶囊并带按压缩放；分段控件选中态实心薄荷；骨架改为扫光；新增菱形分组标记与玻璃图标按钮。 |
+| `ui/components/PreviewStage.kt` / `Timeline.kt` | 媒体工具条改为固定深色玻璃（浅色主题也不铺白）；时间轴选区薄荷描边、播放头渐变。 |
+| `ui/screens/*.kt` | 首页重做为参考图构图；编辑器、批次、进度、结果、设置统一到玻璃 + 极光语言；进度页新增 176 dp 圆环百分比。 |
+| `ui/AppUi.kt` | 页面切换改为淡入 + 上浮；Snackbar 胶囊化。 |
+
+### 7.2 性能取舍
+
+- 极光是一张静态 Canvas，靠 `graphicsLayer` 做 26 秒一次的合成层变换，不逐帧重绘渐变。
+- 星芒的呼吸动画只在 Canvas 的 draw lambda 里读取，避免每帧重组整棵子树。
+- 未实现真实 backdrop blur（Compose 无稳定支持），玻璃用半透明 + 高光近似，避免每帧捕获视频。
+- 入场动画只做位移、不做整体透明度；内容第一帧即完整可见，动画停摆时不会出现空白区块。
+
+### 7.3 验证
+
+```text
+JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:assembleDebug        BUILD SUCCESSFUL
+JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest    4 tests, 0 failures
+JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:lintDebug            0 errors, 18 warnings（均为既有依赖/KTX 建议）
+```
+
+模拟器 API 37（1080×2400 / 420dpi）逐页截图核对，深浅两套主题均检查；另外验证：
+
+- 200% 字体：首页卡片按字号自适应加高加宽，草稿提示改为可换行的 FlowRow，品牌字与卡片文案不再溢出。
+- 横屏 2400×1080：双栏布局可用，宽屏内容最大宽 1320 dp 居中。
+- 深色/浅色切换、系统关闭动画（`animator_duration_scale=0`）下循环动画停在固定相位。
+- 对比度脚本校验：深色主正文 16.5:1、次级 9.2:1；浅色主正文 17.1:1、次级 8.2:1；两套主按钮文字均 ≥5.8:1。
+
+截图见 [docs/screenshots](docs/screenshots)。
+
+### 7.4 仍未做
+
+- 横屏双栏的预览高度仍偏紧（可用高度约 263 dp），竖屏优先级更高；后续可在横屏隐藏时间轴辅助文案或改为可折叠参数。
+- 未在低端真机上测 GPU/温升；极光与星芒的动画预算需要在目标机型上复测。
+- TalkBack 全流程与 200% 字体的编辑器/批次页仍未逐项走查。

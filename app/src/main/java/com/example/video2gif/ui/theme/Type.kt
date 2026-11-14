@@ -9,8 +9,23 @@ import androidx.compose.ui.unit.sp
 /*
  * 单一系统字体家族。层级靠字号、字重与颜色区分，不引入装饰字体。
  * 全部字号使用 sp，跟随系统字体缩放；数值与时间码使用等宽数字。
+ * 字距保持在 -0.04em 以内（42sp 的 -0.6sp ≈ -0.014em），不做挤压式排版。
  */
 val AppTypography = Typography(
+    displayLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 42.sp,
+        lineHeight = 48.sp,
+        letterSpacing = (-0.6).sp,
+    ),
+    displayMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 38.sp,
+        lineHeight = 46.sp,
+        letterSpacing = (-0.5).sp,
+    ),
     displaySmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,

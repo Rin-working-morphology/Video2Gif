@@ -185,14 +185,16 @@ private fun TrackChip(label: String, selected: Boolean, onClick: () -> Unit) {
         onClick = onClick,
         label = { Text(label, style = MaterialTheme.typography.labelMedium) },
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            containerColor = Color.Transparent,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
         ),
         border = FilterChipDefaults.filterChipBorder(
             enabled = true,
             selected = selected,
             borderColor = MaterialTheme.colorScheme.outlineVariant,
-            selectedBorderColor = Color.Transparent,
+            selectedBorderColor = MaterialTheme.colorScheme.primary,
         ),
     )
 }
@@ -211,14 +213,14 @@ private fun CropCanvas(
             .fillMaxWidth()
             .height(268.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF0B090B)),
+            .background(Color(0xFF04090A)),
     ) {
         if (frame == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     if (loading) "正在准备裁剪画面…" else "暂时无法读取画面",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFB5AFB3),
+                    color = Color(0xFFAEBBBC),
                 )
             }
             return@BoxWithConstraints

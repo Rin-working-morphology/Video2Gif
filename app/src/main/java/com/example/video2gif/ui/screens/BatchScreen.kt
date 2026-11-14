@@ -5,6 +5,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
@@ -74,6 +76,9 @@ import com.example.video2gif.domain.outputSpec
 import com.example.video2gif.ui.AppViewModel
 import com.example.video2gif.ui.Screen
 import com.example.video2gif.ui.components.AppTopBar
+import com.example.video2gif.ui.components.AuroraBackdrop
+import com.example.video2gif.ui.components.GlassPanel
+import com.example.video2gif.ui.theme.PanelShape
 import com.example.video2gif.ui.components.BottomGlassBar
 import com.example.video2gif.ui.components.Hairline
 import com.example.video2gif.ui.components.MetaText
@@ -123,11 +128,8 @@ fun BatchScreen(vm: AppViewModel) {
         ((item.recipe.trimEndMs - item.recipe.trimStartMs) / item.recipe.speed).roundToLong()
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-    ) {
+    Box(Modifier.fillMaxSize()) {
+        AuroraBackdrop(Modifier.fillMaxSize(), intensity = 0.9f)
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             AppTopBar(
                 title = "批次",
@@ -150,7 +152,7 @@ fun BatchScreen(vm: AppViewModel) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 20.dp, end = 12.dp, top = 8.dp),
+                        .padding(start = 20.dp, end = 12.dp, top = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -172,13 +174,13 @@ fun BatchScreen(vm: AppViewModel) {
                 }
 
                 Spacer(Modifier.height(8.dp))
-                Column(
+                GlassPanel(
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                        .fillMaxWidth(),
+                    shape = PanelShape.card,
                 ) {
+                  Column {
                     batch.items.forEachIndexed { index, item ->
                         BatchRow(
                             vm = vm,
@@ -195,12 +197,10 @@ fun BatchScreen(vm: AppViewModel) {
                             onRemove = { vm.removeItem(item.id) },
                         )
                         if (index != batch.items.lastIndex) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 88.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
+                            Hairline(Modifier.padding(start = 88.dp))
                         }
                     }
+                  }
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -229,6 +229,29 @@ fun BatchScreen(vm: AppViewModel) {
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     )
+                }
+                if (batch.items.size < MAX_BATCH_ITEMS) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "还可添加 ${MAX_BATCH_ITEMS - batch.items.size} 个视频，统一参数会写入同一批",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = launchPicker) { Text("添加") }
+                    }
                 }
             }
         }
@@ -283,6 +306,7 @@ private fun BatchRow(
     val thumb = vm.thumbnails[item.id]
     val spec = item.recipe.outputSpec(item.source)
     val estimate = vm.estimateFor(item)
+    val analyzing = vm.analyses[item.id]?.analyzing == true
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -293,8 +317,9 @@ private fun BatchRow(
         Box(
             modifier = Modifier
                 .size(width = 64.dp, height = 46.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                .clip(PanelShape.thumb)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), PanelShape.thumb),
         ) {
             if (thumb != null) {
                 Image(
@@ -304,7 +329,7 @@ private fun BatchRow(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                SkeletonBox(Modifier.fillMaxSize(), RoundedCornerShape(8.dp))
+                SkeletonBox(Modifier.fillMaxSize(), PanelShape.thumb)
             }
             if (item.error != null) {
                 Box(
@@ -323,60 +348,77 @@ private fun BatchRow(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f),
                 )
-                if (item.hasIndividualSettings) {
-                    Spacer(Modifier.width(6.dp))
-                    StatusPill(
-                        text = "单独设置",
-                        container = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                if (item.error == null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        estimate?.label ?: "—",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFeatureSettings = "tnum",
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
                     )
                 }
             }
             Spacer(Modifier.height(2.dp))
-            if (item.error != null) {
-                Text(
-                    item.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            } else if (spec != null) {
-                MetaText(
-                    "${formatResolution(spec.width, spec.height)} · ${item.recipe.fps} fps · " +
-                        formatDuration(((item.recipe.trimEndMs - item.recipe.trimStartMs) / item.recipe.speed).roundToLong()),
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        Column(horizontalAlignment = Alignment.End) {
-            if (item.error == null) {
-                Text(
-                    estimate?.label ?: "—",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                if (vm.analyses[item.id]?.analyzing == true) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (item.error != null) {
                     Text(
-                        "分析中",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        item.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
+                } else {
+                    MetaText(
+                        text = buildString {
+                            spec?.let {
+                                append(formatResolution(it.width, it.height))
+                                append(" · ")
+                                append("${item.recipe.fps} fps · ")
+                            }
+                            append(
+                                formatDuration(
+                                    ((item.recipe.trimEndMs - item.recipe.trimStartMs) /
+                                        item.recipe.speed).roundToLong(),
+                                ),
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (analyzing) {
+                        Text(
+                            "分析中",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (item.hasIndividualSettings) {
+                        StatusPill(
+                            text = "单独设置",
+                            container = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
                 }
             }
-            IconButton(
-                onClick = onRemove,
-                modifier = Modifier.size(48.dp).semantics {
-                    contentDescription = "移除 ${item.name}"
-                },
-            ) {
-                Icon(
-                    Icons.Rounded.DeleteOutline,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+        }
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier.size(44.dp).semantics {
+                contentDescription = "移除 ${item.name}"
+            },
+        ) {
+            Icon(
+                Icons.Rounded.DeleteOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(19.dp),
+            )
         }
     }
 }
@@ -520,8 +562,16 @@ private fun <T> ChipRow(
                 onClick = { onSelect(value) },
                 label = { Text(label, style = MaterialTheme.typography.labelMedium) },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    containerColor = Color.Transparent,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = value == selected,
+                    borderColor = MaterialTheme.colorScheme.outlineVariant,
+                    selectedBorderColor = MaterialTheme.colorScheme.primary,
                 ),
             )
         }

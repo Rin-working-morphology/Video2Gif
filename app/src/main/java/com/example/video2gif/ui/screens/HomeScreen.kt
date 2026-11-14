@@ -3,44 +3,45 @@ package com.example.video2gif.ui.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,22 +50,47 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.video2gif.domain.MAX_BATCH_ITEMS
 import com.example.video2gif.ui.AppViewModel
 import com.example.video2gif.ui.Screen
-import com.example.video2gif.ui.components.MetaText
+import com.example.video2gif.ui.components.AuroraBackdrop
+import com.example.video2gif.ui.components.CheckerStrip
+import com.example.video2gif.ui.components.DotGrid
+import com.example.video2gif.ui.components.GlassPanel
+import com.example.video2gif.ui.components.IconGlassButton
+import com.example.video2gif.ui.components.OrbitOverlay
+import com.example.video2gif.ui.components.OrnamentField
 import com.example.video2gif.ui.components.PrimaryAction
 import com.example.video2gif.ui.components.SkeletonBox
-import com.example.video2gif.ui.components.StatusPill
+import com.example.video2gif.ui.components.Sparkle
+import com.example.video2gif.ui.components.entrance
 import com.example.video2gif.ui.theme.AppTheme
+import com.example.video2gif.ui.theme.Motion
+import com.example.video2gif.ui.theme.PanelShape
 
+/**
+ * 首页。参考图的构图直接成为页面结构：
+ * 中央一张竖向玻璃卡（这里是选择视频的入口），四周是极光、胶片条、轨道线与星芒。
+ * 卡片是整页唯一的主动作，空态与“继续调整”共用同一位置，避免两套入口。
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(vm: AppViewModel) {
     val draft = vm.draft
@@ -86,206 +112,80 @@ fun HomeScreen(vm: AppViewModel) {
             )
         }
     }
-    val extended = AppTheme.extended
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Row(
-            modifier = Modifier
-                .widthIn(max = 720.dp)
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 8.dp, top = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Spacer(Modifier.weight(1f))
-            IconButton(
-                onClick = { vm.navigate(Screen.Settings) },
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    Icons.Rounded.Settings,
-                    contentDescription = "设置",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+    Box(Modifier.fillMaxSize()) {
+        AuroraBackdrop(Modifier.fillMaxSize())
 
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .widthIn(max = 720.dp)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                "视频转 GIF",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "先预览效果，确认后再转换。",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            HomeHeader(onSettings = { vm.navigate(Screen.Settings) })
 
-            Spacer(Modifier.height(28.dp))
+            // 主视觉区：卡片占可用高度的 62%–78%，其余留给装饰与星芒。
+            BoxWithConstraints(
+                Modifier
+                    .weight(1f)
+                    .widthIn(max = 720.dp)
+                    .fillMaxWidth()
+                    .entrance(),
+            ) {
+                // 大字号下卡片跟着长一点，给两行标题与说明留出空间。
+                val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
+                val cardWidth: Dp = (maxWidth * 0.60f * (1f + (fontScale - 1f) * 0.25f))
+                    .coerceIn(216.dp, 320.dp)
+                val cardHeight: Dp = (maxHeight * 0.78f * (1f + (fontScale - 1f) * 0.35f))
+                    .coerceIn(320.dp, maxHeight)
 
-            if (draft == null) {
-                EmptyStage()
-            } else {
-                DraftCard(
-                    vm = vm,
-                    title = "继续上次调整",
-                    subtitle = "${draft.items.size} 个视频 · 参数已保留",
-                    onClick = { vm.continueDraft() },
-                )
+                OrnamentField(Modifier.fillMaxSize())
+
+                if (draft == null) {
+                    EmptyHeroCard(
+                        width = cardWidth,
+                        height = cardHeight,
+                        importing = vm.isImporting,
+                        onClick = launchPicker,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                } else {
+                    DraftHeroCard(
+                        vm = vm,
+                        width = cardWidth,
+                        height = cardHeight,
+                        onClick = { vm.continueDraft() },
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
+
+                // 轨道线压在卡片之上，还原参考图“光环绕过玻璃”的层次。
+                OrbitOverlay(Modifier.fillMaxSize(), alpha = 0.26f)
             }
 
-            if (vm.isImporting) {
-                Spacer(Modifier.height(12.dp))
+            HomeStatusSection(vm = vm, draftExists = draft != null) { launchPicker() }
+
+            // 底部落在明亮的极光带上，文字放进一枚低饱和小胶囊里保证对比度。
+            Box(
+                Modifier
+                    .navigationBarsPadding()
+                    .padding(top = 10.dp, bottom = 14.dp),
+            ) {
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                        .padding(16.dp),
+                        .clip(CircleShape)
+                        .background(AppTheme.extended.glassFill.copy(alpha = 0.86f))
+                        .border(1.dp, AppTheme.extended.glassBorder, CircleShape)
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                    )
                     Text(
-                        "正在读取视频信息…",
-                        style = MaterialTheme.typography.bodyMedium,
+                        "每批最多 $MAX_BATCH_ITEMS 个 · 全部在设备上处理",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-
-            val currentRun = run
-            if (currentRun?.isRunning == true) {
-                Spacer(Modifier.height(12.dp))
-                RunInProgressCard(
-                    vm = vm,
-                    onClick = { vm.openProgress() },
-                )
-            } else if (currentRun != null && currentRun.hasRetryable) {
-                Spacer(Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(extended.warningContainer)
-                        .clickable { vm.openProgress() }
-                        .padding(16.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Rounded.WarningAmber,
-                            contentDescription = null,
-                            tint = extended.onWarningContainer,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "上次转换未完成",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = extended.onWarningContainer,
-                            )
-                            Text(
-                                "完成 ${currentRun.succeededCount} 个 · ${currentRun.failedCount + currentRun.interruptedCount + currentRun.canceledCount} 个可重试",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = extended.onWarningContainer.copy(alpha = 0.8f),
-                            )
-                        }
-                        Icon(
-                            Icons.Rounded.ArrowForward,
-                            contentDescription = null,
-                            tint = extended.onWarningContainer,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            } else if (currentRun != null && currentRun.succeededCount > 0) {
-                Spacer(Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(extended.successContainer)
-                        .clickable { vm.openResult() }
-                        .padding(16.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Rounded.CheckCircle,
-                            contentDescription = null,
-                            tint = extended.onSuccessContainer,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                if (currentRun.failedCount > 0) {
-                                    "上次完成 ${currentRun.succeededCount} 个，失败 ${currentRun.failedCount} 个"
-                                } else {
-                                    "上次完成 ${currentRun.succeededCount} 个 GIF"
-                                },
-                                style = MaterialTheme.typography.titleSmall,
-                                color = extended.onSuccessContainer,
-                            )
-                            Text(
-                                "查看结果与分享",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = extended.onSuccessContainer.copy(alpha = 0.8f),
-                            )
-                        }
-                        Icon(
-                            Icons.Rounded.ArrowForward,
-                            contentDescription = null,
-                            tint = extended.onSuccessContainer,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-        }
-
-        Column(
-            modifier = Modifier
-                .widthIn(max = 720.dp)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-        ) {
-            PrimaryAction(
-                text = "选择视频",
-                onClick = {
-                    if (draft != null) confirmReplace = true else launchPicker()
-                },
-                icon = Icons.Rounded.Add,
-                enabled = !vm.isImporting,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-            )
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "每批最多 $MAX_BATCH_ITEMS 个 · 在设备上处理",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
         }
     }
 
@@ -311,183 +211,466 @@ fun HomeScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun EmptyStage() {
+private fun HomeHeader(onSettings: () -> Unit) {
     val extended = AppTheme.extended
-    Column(
+    Row(
         modifier = Modifier
+            .widthIn(max = 720.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .padding(vertical = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(start = 24.dp, end = 12.dp, top = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier.size(width = 168.dp, height = 118.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                Modifier
-                    .size(width = 132.dp, height = 88.dp)
-                    .offset(x = 18.dp, y = 12.dp)
-                    .rotate(7f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            )
-            Box(
-                Modifier
-                    .size(width = 132.dp, height = 88.dp)
-                    .offset(x = (-14).dp, y = 16.dp)
-                    .rotate(-6f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainer),
-            )
-            Box(
-                modifier = Modifier
-                    .size(width = 142.dp, height = 94.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(extended.mediaStage)
-                    .border(1.dp, extended.mediaStageBorder, RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.Movie,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.82f),
-                    modifier = Modifier.size(32.dp),
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Sparkle(sizeDp = 13.dp, color = MaterialTheme.colorScheme.primary, alpha = 0.95f)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Video",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                ) {
-                    Text(
-                        "GIF",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                }
+                Text(
+                    text = "2Gif",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                )
             }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "把手机视频裁成一小片循环动画",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "还没有选择视频",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+        IconGlassButton(
+            icon = Icons.Rounded.Settings,
+            contentDescription = "设置",
+            onClick = onSettings,
         )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "支持常见手机录像格式，声音会被忽略",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    }
+    // 顶部细装饰，呼应参考图右侧的棋盘短条。
+    Row(Modifier.padding(start = 24.dp, top = 6.dp)) {
+        CheckerStrip(modifier = Modifier.size(width = 46.dp, height = 12.dp), alpha = 0.18f)
+        Spacer(Modifier.weight(1f))
+        DotGrid(modifier = Modifier.size(width = 22.dp, height = 22.dp), alpha = 0.16f)
+        Spacer(Modifier.width(24.dp))
     }
 }
 
+/**
+ * 空白态的玻璃卡。内部留白与星芒标记直接来自参考图；
+ * 主操作是卡片底部的一枚薄荷胶囊，整张卡本身也可点击。
+ */
 @Composable
-private fun DraftCard(
-    vm: AppViewModel,
-    title: String,
-    subtitle: String,
+private fun EmptyHeroCard(
+    width: Dp,
+    height: Dp,
+    importing: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val extended = AppTheme.extended
+    val interaction = remember { MutableInteractionSource() }
+    GlassPanel(
+        modifier = modifier
+            .width(width)
+            .height(height)
+            .clip(PanelShape.panel)
+            .clickable(
+                enabled = !importing,
+                role = Role.Button,
+                interactionSource = interaction,
+                indication = ripple(color = MaterialTheme.colorScheme.primary),
+                onClick = onClick,
+            )
+            .semantics {
+                contentDescription = "选择视频，先预览效果，确认后再转换"
+            },
+        ambient = true,
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 22.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Sparkle(sizeDp = 26.dp, color = extended.sparkle, alpha = 0.95f)
+            Spacer(Modifier.height(10.dp))
+            DottedLine()
+            Spacer(Modifier.weight(1f))
+            if (importing) {
+                ShimmeringFrames()
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    "正在读取视频信息…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                ApertureMark()
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    "还没有选择视频",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "支持常见手机录像格式，声音会被忽略",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            PrimaryAction(
+                text = if (importing) "读取中" else "选择视频",
+                icon = if (importing) null else Icons.Rounded.Add,
+                onClick = onClick,
+                enabled = !importing,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/** 继续上次调整：同一张卡片换成预览缩略图，主操作改为继续。 */
+@Composable
+private fun DraftHeroCard(
+    vm: AppViewModel,
+    width: Dp,
+    height: Dp,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val batch = vm.draft ?: return
     val first = batch.items.firstOrNull { it.source != null } ?: batch.items.firstOrNull()
     val thumb = first?.let { vm.thumbnails[it.id] }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .clickable(onClick = onClick)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val extended = AppTheme.extended
+
+    GlassPanel(
+        modifier = modifier
+            .width(width)
+            .height(height)
+            .clip(PanelShape.panel)
+            .clickable(
+                role = Role.Button,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = MaterialTheme.colorScheme.primary),
+                onClick = onClick,
+            )
+            .semantics {
+                contentDescription = "继续上次调整，${batch.items.size} 个视频"
+            },
+        ambient = true,
     ) {
-        Box(
-            modifier = Modifier
-                .size(width = 72.dp, height = 52.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        ) {
+        Box(Modifier.fillMaxSize()) {
             if (thumb != null) {
                 Image(
                     bitmap = thumb.asImageBitmap(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp)
+                        .clip(PanelShape.card),
                 )
             } else {
-                SkeletonBox(Modifier.fillMaxSize(), RoundedCornerShape(10.dp))
+                // 缩略图还在解码时给一层骨架，避免整张卡片看起来是空的。
+                SkeletonBox(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp),
+                    shape = PanelShape.card,
+                )
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(6.dp)
+                    .clip(PanelShape.card)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to extended.mediaStage.copy(alpha = 0.15f),
+                            0.45f to extended.mediaStage.copy(alpha = 0.55f),
+                            1f to extended.mediaStage.copy(alpha = 0.92f),
+                        ),
+                    ),
+            )
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 22.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Sparkle(sizeDp = 22.dp, color = extended.sparkle, alpha = 0.9f)
+                Spacer(Modifier.height(10.dp))
+                DottedLine()
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "继续上次调整",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${batch.items.size} 个视频 · 参数已保留",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.82f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+                Spacer(Modifier.weight(1f))
+                PrimaryAction(
+                    text = "继续调整",
+                    icon = Icons.Rounded.ArrowForward,
+                    onClick = onClick,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+    }
+}
+
+/** 竖向点线。参考图卡片顶部的标记，纯装饰。 */
+@Composable
+private fun DottedLine(dots: Int = 3) {
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        repeat(dots) {
+            Box(
+                Modifier
+                    .size(3.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.55f)),
             )
         }
-        Icon(
-            Icons.Rounded.ArrowForward,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
+    }
+}
+
+/** 光圈 + 播放三角：卡片中央的视觉焦点，也暗示“视频”。 */
+@Composable
+private fun ApertureMark(size: Dp = 96.dp) {
+    val extended = AppTheme.extended
+    val primary = MaterialTheme.colorScheme.primary
+    val ornament = extended.ornament
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val radius = this.size.minDimension / 2f
+            drawCircle(
+                color = ornament.copy(alpha = 0.24f),
+                radius = radius - 1.dp.toPx(),
+                style = Stroke(width = 1.dp.toPx()),
+            )
+            drawCircle(
+                color = ornament.copy(alpha = 0.12f),
+                radius = radius * 0.72f,
+                style = Stroke(width = 1.dp.toPx()),
+            )
+            // 四段弧线组成断续的光环
+            val arcRadius = radius * 0.86f
+            for (index in 0 until 4) {
+                val start = index * 90f + 12f
+                drawArc(
+                    color = primary.copy(alpha = 0.75f),
+                    startAngle = start,
+                    sweepAngle = 46f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - arcRadius, center.y - arcRadius),
+                    size = androidx.compose.ui.geometry.Size(arcRadius * 2, arcRadius * 2),
+                    style = Stroke(width = 1.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                )
+            }
+            val triangle = Path().apply {
+                val s = radius * 0.30f
+                moveTo(center.x - s * 0.55f, center.y - s)
+                lineTo(center.x + s * 0.95f, center.y)
+                lineTo(center.x - s * 0.55f, center.y + s)
+                close()
+            }
+            drawPath(triangle, primary.copy(alpha = 0.95f))
+        }
     }
 }
 
 @Composable
-private fun RunInProgressCard(vm: AppViewModel, onClick: () -> Unit) {
+private fun ShimmeringFrames() {
+    Box(Modifier.size(width = 120.dp, height = 84.dp), contentAlignment = Alignment.Center) {
+        SkeletonBox(
+            Modifier
+                .size(width = 92.dp, height = 64.dp)
+                .padding(top = 8.dp),
+            PanelShape.thumb,
+        )
+        SkeletonBox(
+            Modifier
+                .size(width = 104.dp, height = 70.dp)
+                .align(Alignment.Center),
+            PanelShape.thumb,
+        )
+    }
+}
+
+/** 卡片下方的状态区：草稿入口或最近一次转换。没有状态时不占位。 */
+@Composable
+private fun HomeStatusSection(
+    vm: AppViewModel,
+    draftExists: Boolean,
+    onPickNew: () -> Unit,
+) {
     val run by vm.run.collectAsStateWithLifecycle()
-    val state = run ?: return
-    Box(
-        modifier = Modifier
+    val current = run
+    val gap = 6.dp
+    Column(
+        Modifier
+            .widthIn(max = 720.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .clickable(onClick = onClick)
-            .padding(16.dp),
+            .padding(horizontal = 20.dp),
     ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "正在转换 ${state.finishedCount + 1} / ${state.items.size}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        state.currentItem?.name ?: "准备中",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                        maxLines = 1,
-                    )
-                }
-                StatusPill(
-                    text = "查看",
-                    container = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
+        if (draftExists) {
+            FlowRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    "已有草稿，想换个视频？",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                )
+                TextButton(onClick = onPickNew) { Text("重新选择") }
+            }
+        }
+        when {
+            current?.isRunning == true -> {
+                Spacer(Modifier.height(gap))
+                RunStrip(
+                    title = "正在转换 ${current.finishedCount + 1} / ${current.items.size}",
+                    subtitle = current.currentItem?.name ?: "准备中",
+                    progress = current.totalProgress,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onClick = { vm.openProgress() },
                 )
             }
-            Spacer(Modifier.height(10.dp))
-            LinearProgressIndicator(
-                progress = { state.totalProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(CircleShape),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f),
+            current != null && current.hasRetryable -> {
+                Spacer(Modifier.height(gap))
+                RunStrip(
+                    title = "上次转换未完成",
+                    subtitle = "完成 ${current.succeededCount} 个 · " +
+                        "${current.failedCount + current.interruptedCount + current.canceledCount} 个可重试",
+                    progress = null,
+                    accent = AppTheme.extended.warning,
+                    onClick = { vm.openProgress() },
+                    icon = Icons.Rounded.WarningAmber,
+                )
+            }
+            current != null && current.succeededCount > 0 -> {
+                Spacer(Modifier.height(gap))
+                RunStrip(
+                    title = if (current.failedCount > 0) {
+                        "完成 ${current.succeededCount} 个，失败 ${current.failedCount} 个"
+                    } else {
+                        "上次完成 ${current.succeededCount} 个 GIF"
+                    },
+                    subtitle = "查看结果与分享",
+                    progress = null,
+                    accent = AppTheme.extended.success,
+                    onClick = { vm.openResult() },
+                    icon = Icons.Rounded.CheckCircle,
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+    }
+}
+
+@Composable
+private fun RunStrip(
+    title: String,
+    subtitle: String,
+    progress: Float?,
+    accent: Color,
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+) {
+    val animated by animateFloatAsState(
+        targetValue = progress ?: 0f,
+        animationSpec = tween(Motion.Base, easing = Motion.EaseOutQuart),
+        label = "runStrip",
+    )
+    GlassPanel(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(PanelShape.card)
+            .clickable(
+                role = Role.Button,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = accent),
+                onClick = onClick,
+            ),
+        shape = PanelShape.card,
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (icon != null) {
+                    Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+                } else {
+                    Canvas(Modifier.size(18.dp)) {
+                        drawArc(
+                            color = accent,
+                            startAngle = -90f,
+                            sweepAngle = 360f * animated,
+                            useCenter = false,
+                            style = Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            Icon(
+                Icons.Rounded.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
             )
         }
     }
