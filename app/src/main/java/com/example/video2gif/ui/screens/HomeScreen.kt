@@ -92,7 +92,7 @@ fun HomeScreen(vm: AppViewModel) {
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        AuroraBackdrop(Modifier.fillMaxSize())
+        AuroraBackdrop(Modifier.fillMaxSize(), showEdgeOrnaments = false)
         val fontScale = LocalDensity.current.fontScale
         val scrollContent = maxHeight < 600.dp || fontScale > 1.3f
 
@@ -124,7 +124,7 @@ fun HomeScreen(vm: AppViewModel) {
 
                 OrnamentField(Modifier.fillMaxSize())
                 // 轨道在主卡片后方穿行，避免划过标题、预览与按钮。
-                OrbitOverlay(Modifier.fillMaxSize(), alpha = 0.22f)
+                OrbitOverlay(Modifier.fillMaxSize())
 
                 EmptyHeroCard(
                     width = cardWidth,

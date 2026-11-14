@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -57,9 +58,8 @@ import kotlin.math.min
 fun AuroraBackdrop(
     modifier: Modifier = Modifier,
     intensity: Float = 1f,
+    showEdgeOrnaments: Boolean = true,
 ) {
-    val extended = AppTheme.extended
-    val dark = AppTheme.isDark
     val background = MaterialTheme.colorScheme.background
     val reducedMotion = LocalReducedMotion.current
 
@@ -78,7 +78,6 @@ fun AuroraBackdrop(
         )
     }
 
-    val drift = phase?.value ?: 0.5f
     Box(modifier.background(background)) {
         Image(
             painter = painterResource(R.drawable.watercolor_top),
@@ -89,6 +88,7 @@ fun AuroraBackdrop(
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .graphicsLayer {
+                    val drift = phase?.value ?: 0.5f
                     alpha = intensity
                     scaleX = 1.06f + drift * 0.02f
                     translationX = -size.width * 0.006f * drift
@@ -103,11 +103,54 @@ fun AuroraBackdrop(
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .graphicsLayer {
+                    val drift = phase?.value ?: 0.5f
                     alpha = intensity
                     scaleX = 1.06f + drift * 0.02f
                     translationX = size.width * 0.006f * drift
                 },
         )
+        if (showEdgeOrnaments) {
+            EdgeOrnaments(Modifier.matchParentSize(), intensity)
+        }
+    }
+}
+
+/** 内容页只在外沿保留星环与色片，让上下水彩自然延伸到页面留白。 */
+@Composable
+private fun EdgeOrnaments(modifier: Modifier, intensity: Float) {
+    val colors = AppTheme.extended
+    val dark = AppTheme.isDark
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val band = min(w, h) * 0.38f
+        val ink = colors.ornament.copy(alpha = (if (dark) 0.28f else 0.18f) * intensity)
+        // 星环的主体落在画面外，仅露出贴着上下切图的弧段。
+        for (index in 0..2) {
+            val inset = index * 7.dp.toPx()
+            drawOval(
+                color = ink.copy(alpha = ink.alpha * (1f - index * 0.22f)),
+                topLeft = Offset(-w * 0.20f, -band * 0.58f + inset),
+                size = Size(w * 1.45f, band),
+                style = Stroke(0.8.dp.toPx()),
+            )
+            drawOval(
+                color = ink.copy(alpha = ink.alpha * (1f - index * 0.22f)),
+                topLeft = Offset(-w * 0.22f, h - band * 0.54f + inset),
+                size = Size(w * 1.36f, band),
+                style = Stroke(0.8.dp.toPx()),
+            )
+        }
+        filmBar(w * 0.025f, h * 0.26f, 5.dp.toPx(), h * 0.12f, colors.auroraCore, 0.32f * intensity)
+        filmBar(w * 0.955f, h * 0.64f, 8.dp.toPx(), h * 0.13f, colors.auroraPale, 0.40f * intensity)
+        drawLine(ink, Offset(w * 0.97f, h * 0.48f), Offset(w * 0.97f, h * 0.60f), 1.dp.toPx())
+        drawLine(ink, Offset(w * 0.045f, h * 0.76f), Offset(w * 0.045f, h * 0.86f), 1.dp.toPx())
+        translate(w * 0.085f, h * 0.13f) {
+            drawPath(sparklePath(Size(17.dp.toPx(), 17.dp.toPx())), colors.sparkle.copy(alpha = 0.42f * intensity))
+        }
+        translate(w * 0.88f, h * 0.88f) {
+            drawPath(sparklePath(Size(22.dp.toPx(), 22.dp.toPx())), colors.sparkle.copy(alpha = 0.50f * intensity))
+        }
     }
 }
 
@@ -254,6 +297,8 @@ fun OrnamentField(
 ) {
     val extended = AppTheme.extended
     val ornament = extended.ornament
+    val dark = AppTheme.isDark
+    val lineAlpha = (if (dark) 0.60f else 0.32f) * intensity
 
     BoxWithConstraints(modifier) {
         Canvas(Modifier.matchParentSize()) {
@@ -262,9 +307,12 @@ fun OrnamentField(
 
             if (showBars) {
                 // 叠放的宽薄片与窄亮边，轮廓保留在主卡片两侧。
-                filmBar(w * 0.13f, h * 0.22f, w * 0.19f, h * 0.56f, extended.filmC, 0.65f * intensity)
-                filmBar(w * 0.66f, h * 0.12f, w * 0.20f, h * 0.55f, extended.auroraDeep, 0.42f * intensity)
-                filmBar(w * 0.72f, h * 0.56f, w * 0.12f, h * 0.27f, extended.auroraCore, 0.28f * intensity)
+                filmBar(w * 0.12f, h * 0.22f, w * 0.22f, h * 0.59f, extended.auroraCore, (if (dark) 0.70f else 0.32f) * intensity)
+                filmBar(w * 0.64f, h * 0.10f, w * 0.23f, h * 0.57f, extended.auroraPale, (if (dark) 0.64f else 0.56f) * intensity)
+                filmBar(w * 0.76f, h * 0.59f, w * 0.13f, h * 0.25f, extended.filmC, 0.80f * intensity)
+                filmBar(w * 0.105f, h * 0.13f, w * 0.09f, h * 0.16f, extended.auroraPale, 0.52f * intensity)
+                filmBar(w * 0.145f, h * 0.17f, w * 0.055f, h * 0.22f, extended.auroraCrest, 0.68f * intensity)
+                filmBar(w * 0.82f, h * 0.69f, w * 0.055f, h * 0.12f, extended.auroraCore, 0.65f * intensity)
                 // 两侧短条沿用相同材质。
                 filmBar(w * 0.085f, h * 0.16f, 7.dp.toPx(), h * 0.19f, extended.filmC, 0.85f * intensity)
                 filmBar(w * 0.085f, h * 0.40f, 12.dp.toPx(), h * 0.11f, extended.filmB, 0.95f * intensity)
@@ -273,6 +321,13 @@ fun OrnamentField(
                 filmBar(w * 0.90f, h * 0.30f, 9.dp.toPx(), h * 0.17f, extended.filmB, 0.9f * intensity)
                 filmBar(w * 0.90f, h * 0.55f, 6.dp.toPx(), h * 0.21f, extended.filmA, 0.75f * intensity)
                 filmBar(w * 0.90f, h * 0.80f, 11.dp.toPx(), h * 0.09f, extended.filmC, 0.6f * intensity)
+                // 银白 / 青灰的窄条与断线，给柔软的水彩增加清晰节奏。
+                filmBar(w * 0.055f, h * 0.065f, 3.dp.toPx(), h * 0.18f, ornament, lineAlpha)
+                filmBar(w * 0.80f, h * 0.095f, 6.dp.toPx(), h * 0.075f, ornament, lineAlpha)
+                filmBar(w * 0.91f, h * 0.48f, 7.dp.toPx(), h * 0.11f, ornament, lineAlpha)
+                filmBar(w * 0.07f, h * 0.70f, 4.dp.toPx(), h * 0.10f, extended.auroraCrest, 0.8f * intensity)
+                drawLine(ornament.copy(alpha = lineAlpha), Offset(w * 0.94f, h * 0.78f), Offset(w * 0.94f, h * 0.94f), 0.8.dp.toPx())
+                drawLine(ornament.copy(alpha = lineAlpha * 0.7f), Offset(w * 0.96f, h * 0.85f), Offset(w * 0.96f, h * 0.94f), 0.6.dp.toPx())
             }
 
             // 点阵。
@@ -308,7 +363,7 @@ private fun DrawScope.filmBar(
     alpha: Float,
 ) {
     val corner = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
-    // 平涂 + 极轻的同色洇色：像参考图里的玻璃薄板，不再叠加白色高光。
+    // 同色深浅变化保留半透明叠片感，不使用发光外边或阴影。
     drawRoundRect(
         brush = Brush.linearGradient(
             0f to color.copy(alpha = alpha * 0.82f),
@@ -376,33 +431,31 @@ private fun DrawScope.drawCheckerStrip(origin: Offset, color: Color, alpha: Floa
 fun OrbitOverlay(
     modifier: Modifier = Modifier,
     color: Color = AppTheme.extended.ornament,
-    alpha: Float = 0.30f,
+    alpha: Float = 0.58f,
 ) {
+    val dark = AppTheme.isDark
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        val stroke = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round)
-        rotate(degrees = -16f, pivot = center) {
-            drawOval(
-                color = color.copy(alpha = alpha),
-                topLeft = Offset(-w * 0.10f, h * 0.30f),
-                size = Size(w * 1.20f, h * 0.30f),
-                style = stroke,
-            )
-            drawOval(
-                color = color.copy(alpha = alpha * 0.55f),
-                topLeft = Offset(w * 0.02f, h * 0.355f),
-                size = Size(w * 0.96f, h * 0.22f),
-                style = stroke,
-            )
+        val opacity = alpha * if (dark) 1f else 0.58f
+        // 三道相近而不重合的轨道，收拢在画面内，形成参考图的斜向星环。
+        rotate(degrees = -29f, pivot = Offset(w * 0.5f, h * 0.48f)) {
+            repeat(3) { index ->
+                drawOval(
+                    color = color.copy(alpha = opacity * (1f - index * 0.20f)),
+                    topLeft = Offset(w * (0.015f + index * 0.014f), h * 0.48f - w * (0.13f + index * 0.018f)),
+                    size = Size(w * (0.97f - index * 0.018f), w * (0.26f + index * 0.036f)),
+                    style = Stroke(width = (1.1f - index * 0.15f).dp.toPx(), cap = StrokeCap.Round),
+                )
+            }
         }
-        rotate(degrees = 12f, pivot = center) {
-            drawOval(
-                color = color.copy(alpha = alpha * 0.5f),
-                topLeft = Offset(w * 0.05f, h * 0.66f),
-                size = Size(w * 0.90f, h * 0.20f),
-                style = stroke,
-            )
+        // 下方两道开放弧线承接底部水彩，避免另一个完整圆环抢走主视觉。
+        repeat(2) { index ->
+            val arc = Path().apply {
+                moveTo(w * (0.10f + index * 0.04f), h * 0.88f)
+                cubicTo(w * 0.32f, h * 0.73f, w * 0.72f, h * 0.79f, w * (0.90f + index * 0.025f), h * 0.62f)
+            }
+            drawPath(arc, color.copy(alpha = opacity * (0.50f - index * 0.15f)), style = Stroke(0.8.dp.toPx()))
         }
     }
 }
@@ -416,10 +469,10 @@ data class SparkleSpot(
 )
 
 private val DefaultSparkles = listOf(
-    SparkleSpot(0.20f, 0.20f, 12.dp, 0.85f, 0.1f),
-    SparkleSpot(0.83f, 0.27f, 16.dp, 0.95f, 0.45f),
-    SparkleSpot(0.11f, 0.66f, 10.dp, 0.6f, 0.7f),
-    SparkleSpot(0.80f, 0.78f, 13.dp, 0.8f, 0.25f),
+    SparkleSpot(0.10f, 0.34f, 22.dp, 0.85f, 0.1f),
+    SparkleSpot(0.89f, 0.22f, 25.dp, 0.95f, 0.45f),
+    SparkleSpot(0.06f, 0.65f, 12.dp, 0.65f, 0.7f),
+    SparkleSpot(0.85f, 0.74f, 22.dp, 0.85f, 0.25f),
     SparkleSpot(0.62f, 0.11f, 7.dp, 0.45f, 0.9f),
 )
 
