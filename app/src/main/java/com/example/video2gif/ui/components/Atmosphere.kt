@@ -8,8 +8,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -29,11 +33,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.video2gif.ui.theme.AppTheme
 import com.example.video2gif.ui.theme.Motion
+import com.example.video2gif.R
 import kotlin.math.min
 
 /*
@@ -45,7 +52,7 @@ import kotlin.math.min
  * - 系统关闭动画时，所有循环动画停在固定相位，装饰仍然可见。
  */
 
-/** 极光背景。铺满父容器，内部包含顶部光冠、右下辉光与底部波。 */
+/** 水彩背景色块。上下使用独立透明 PNG，几何装饰由 OrnamentField 继续绘制。 */
 @Composable
 fun AuroraBackdrop(
     modifier: Modifier = Modifier,
@@ -71,119 +78,36 @@ fun AuroraBackdrop(
         )
     }
 
-    Canvas(
-        modifier = modifier.graphicsLayer {
-            // 动画值在合成阶段读取，避免逐帧重组与重新记录背景绘制。
-            val drift = phase?.value ?: 0.5f
-            scaleX = 1.05f + drift * 0.03f
-            scaleY = 1.03f + drift * 0.02f
-            translationX = -size.width * 0.012f * drift
-            translationY = size.height * 0.008f * (drift - 0.5f)
-        },
-    ) {
-        val w = size.width
-        val h = size.height
-        // 石墨底保持纯色。极光由几块半透明的平涂色块叠出水彩渗色，
-        // 避免连续渐变把深色页面变成“发光特效”。
-        drawRect(background)
-
-        val crest = Path().apply {
-            moveTo(0f, -h * 0.04f)
-            lineTo(w, -h * 0.04f)
-            lineTo(w, h * 0.16f)
-            cubicTo(w * 0.80f, h * 0.26f, w * 0.60f, h * 0.05f, w * 0.38f, h * 0.105f)
-            cubicTo(w * 0.22f, h * 0.15f, w * 0.10f, h * 0.07f, 0f, h * 0.14f)
-            close()
-        }
-        val crestAlpha = (if (dark) 0.46f else 0.26f) * intensity
-        val coreAlpha = (if (dark) 0.38f else 0.22f) * intensity
-
-        // 主色块：边缘清晰、内部平整，贴近参考图的纸上水彩构图。
-        drawPath(crest, extended.auroraCore.copy(alpha = crestAlpha))
-
-        // 宽幅色相过渡模拟水彩相互洇开的效果，避免出现孤立的聚光点。
-        clipPath(crest) {
-            drawRect(
-                brush = Brush.linearGradient(
-                    0f to extended.auroraDeep.copy(alpha = if (dark) 0.30f else 0.12f),
-                    0.24f to extended.auroraCore.copy(alpha = if (dark) 0.08f else 0.04f),
-                    0.54f to extended.auroraCrest.copy(alpha = if (dark) 0.32f else 0.14f),
-                    0.78f to extended.auroraPale.copy(alpha = if (dark) 0.48f else 0.22f),
-                    1f to extended.auroraCore.copy(alpha = if (dark) 0.10f else 0.04f),
-                    start = Offset(w * 0.02f, h * 0.14f),
-                    end = Offset(w * 0.96f, h * 0.04f),
-                ),
-            )
-            drawRect(
-                brush = Brush.linearGradient(
-                    0f to Color.Transparent,
-                    0.42f to extended.auroraPale.copy(alpha = if (dark) 0.22f else 0.10f),
-                    0.72f to extended.auroraCore.copy(alpha = if (dark) 0.22f else 0.10f),
-                    1f to Color.Transparent,
-                    start = Offset(w * 0.28f, -h * 0.04f),
-                    end = Offset(w * 0.74f, h * 0.18f),
-                ),
-            )
-        }
-
-        // 光冠下缘只保留一条纤细轮廓，给色块一个安静的收口。
-        val crestEdge = Path().apply {
-            moveTo(0f, h * 0.14f)
-            cubicTo(w * 0.10f, h * 0.07f, w * 0.22f, h * 0.15f, w * 0.38f, h * 0.105f)
-            cubicTo(w * 0.60f, h * 0.05f, w * 0.80f, h * 0.26f, w, h * 0.16f)
-        }
-        drawPath(
-            path = crestEdge,
-            color = extended.auroraPale.copy(alpha = crestAlpha * 0.42f),
-            style = Stroke(width = 1.dp.toPx()),
+    val drift = phase?.value ?: 0.5f
+    Box(modifier.background(background)) {
+        Image(
+            painter = painterResource(R.drawable.watercolor_top),
+            contentDescription = null,
+            contentScale = ContentScale.FillWidth,
+            alignment = Alignment.TopCenter,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .graphicsLayer {
+                    alpha = intensity
+                    scaleX = 1.06f + drift * 0.02f
+                    translationX = -size.width * 0.006f * drift
+                },
         )
-
-        // 底部波光同样使用平涂色块，避免深色主题底部泛白。
-        val waveTop = h * 0.66f
-        val wave = Path().apply {
-            moveTo(0f, h)
-            lineTo(0f, waveTop + h * 0.06f)
-            cubicTo(w * 0.22f, waveTop - h * 0.05f, w * 0.46f, waveTop + h * 0.10f, w * 0.68f, waveTop + h * 0.045f)
-            cubicTo(w * 0.84f, waveTop + h * 0.005f, w * 0.94f, waveTop + h * 0.075f, w, waveTop + h * 0.03f)
-            lineTo(w, h)
-            close()
-        }
-        drawPath(wave, extended.auroraCore.copy(alpha = coreAlpha))
-        clipPath(wave) {
-            drawRect(
-                brush = Brush.linearGradient(
-                    0f to extended.auroraDeep.copy(alpha = if (dark) 0.22f else 0.10f),
-                    0.28f to extended.auroraCore.copy(alpha = if (dark) 0.06f else 0.03f),
-                    0.56f to extended.auroraPale.copy(alpha = if (dark) 0.42f else 0.18f),
-                    0.82f to extended.auroraCrest.copy(alpha = if (dark) 0.26f else 0.12f),
-                    1f to extended.auroraDeep.copy(alpha = if (dark) 0.24f else 0.10f),
-                    start = Offset(0f, h * 0.94f),
-                    end = Offset(w, h * 0.84f),
-                ),
-            )
-            drawRect(
-                brush = Brush.linearGradient(
-                    0f to Color.Transparent,
-                    0.38f to extended.auroraCrest.copy(alpha = if (dark) 0.20f else 0.08f),
-                    0.68f to extended.auroraPale.copy(alpha = if (dark) 0.18f else 0.08f),
-                    1f to Color.Transparent,
-                    start = Offset(w * 0.12f, h * 0.82f),
-                    end = Offset(w * 0.86f, h),
-                ),
-            )
-        }
-
-        val waveEdge = Path().apply {
-            moveTo(0f, waveTop + h * 0.06f)
-            cubicTo(w * 0.22f, waveTop - h * 0.05f, w * 0.46f, waveTop + h * 0.10f, w * 0.68f, waveTop + h * 0.045f)
-            cubicTo(w * 0.84f, waveTop + h * 0.005f, w * 0.94f, waveTop + h * 0.075f, w, waveTop + h * 0.03f)
-        }
-        drawPath(
-            path = waveEdge,
-            color = extended.auroraCrest.copy(alpha = coreAlpha * 0.52f),
-            style = Stroke(width = 1.2.dp.toPx()),
+        Image(
+            painter = painterResource(R.drawable.watercolor_bottom),
+            contentDescription = null,
+            contentScale = ContentScale.FillWidth,
+            alignment = Alignment.BottomCenter,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .graphicsLayer {
+                    alpha = intensity
+                    scaleX = 1.06f + drift * 0.02f
+                    translationX = size.width * 0.006f * drift
+                },
         )
-
     }
 }
 
@@ -384,12 +308,12 @@ private fun DrawScope.filmBar(
     alpha: Float,
 ) {
     val corner = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
+    // 平涂 + 极轻的同色洇色：像参考图里的玻璃薄板，不再叠加白色高光。
     drawRoundRect(
         brush = Brush.linearGradient(
-            0f to lerpColor(color, Color.White, 0.24f).copy(alpha = alpha * 0.80f),
-            0.32f to color.copy(alpha = alpha * 0.48f),
-            0.70f to color.copy(alpha = alpha * 0.90f),
-            1f to color.copy(alpha = alpha * 0.22f),
+            0f to color.copy(alpha = alpha * 0.82f),
+            0.55f to color.copy(alpha = alpha * 0.55f),
+            1f to color.copy(alpha = alpha * 0.80f),
             start = Offset(x, y),
             end = Offset(x + widthPx, y + heightPx),
         ),
@@ -399,7 +323,7 @@ private fun DrawScope.filmBar(
     )
     drawRoundRect(
         brush = Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = alpha * 0.26f), Color.Transparent),
+            listOf(Color.White.copy(alpha = alpha * 0.10f), Color.Transparent),
             startY = y, endY = y + heightPx * 0.8f,
         ),
         topLeft = Offset(x, y),
