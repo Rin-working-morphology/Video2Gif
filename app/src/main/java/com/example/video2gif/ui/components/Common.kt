@@ -7,15 +7,16 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -41,6 +42,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -54,14 +56,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -88,15 +94,47 @@ val LocalReducedMotion = compositionLocalOf { false }
 @Composable
 fun rememberReducedMotion(): Boolean {
     val context = LocalContext.current
-    return remember(context) {
-        val scale = runCatching {
+    fun readSetting(): Boolean = runCatching {
             Settings.Global.getFloat(
                 context.contentResolver,
                 Settings.Global.ANIMATOR_DURATION_SCALE,
                 1f,
             )
-        }.getOrDefault(1f)
-        scale == 0f
+        }.getOrDefault(1f) == 0f
+    var reduced by remember(context) { mutableStateOf(readSetting()) }
+    DisposableEffect(context) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) { reduced = readSetting() }
+        }
+        context.contentResolver.registerContentObserver(
+            Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer,
+        )
+        reduced = readSetting()
+        onDispose { context.contentResolver.unregisterContentObserver(observer) }
+    }
+    return reduced
+}
+
+/** 同一交互源驱动按压与原生涟漪；取消手势也会复位，不触发额外点击。 */
+@Composable
+fun Modifier.pressFeedback(
+    interactionSource: MutableInteractionSource,
+    enabled: Boolean = true,
+    pressedScale: Float = 0.975f,
+): Modifier {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val reduced = LocalReducedMotion.current
+    val scale = animateFloatAsState(
+        targetValue = if (pressed && enabled && !reduced) pressedScale else 1f,
+        animationSpec = tween(
+            if (reduced) 0 else if (pressed) Motion.Press else Motion.Release,
+            easing = Motion.EaseOutQuart,
+        ),
+        label = "pressFeedback",
+    )
+    return graphicsLayer {
+        scaleX = scale.value
+        scaleY = scale.value
     }
 }
 
@@ -170,8 +208,18 @@ fun IconGlassButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Box(
-        modifier = modifier.size(48.dp),
+        modifier = modifier
+            .size(48.dp)
+            .pressFeedback(interaction)
+            .clip(CircleShape)
+            .clickable(
+                role = Role.Button,
+                interactionSource = interaction,
+                indication = ripple(),
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -179,13 +227,7 @@ fun IconGlassButton(
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(AppTheme.extended.glassFill)
-                .border(1.dp, AppTheme.extended.glassBorder, CircleShape)
-                .clickable(
-                    role = Role.Button,
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(bounded = false, radius = 24.dp),
-                    onClick = onClick,
-                ),
+                .border(1.dp, AppTheme.extended.glassBorder, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -220,6 +262,21 @@ fun GlassPanel(
             )
         }
         Box(Modifier.matchParentSize().clip(shape).background(extended.glassFill)) {
+            if (ambient) {
+                // 缓存斜向柔光：只在主卡片表现磨砂片的厚度，正文区域保持安静。
+                Box(Modifier.matchParentSize().drawWithCache {
+                    val sheen = Brush.linearGradient(
+                        0f to Color.Transparent,
+                        0.24f to extended.auroraPale.copy(alpha = 0.10f),
+                        0.38f to Color.Transparent,
+                        0.78f to extended.auroraCore.copy(alpha = 0.08f),
+                        1f to Color.Transparent,
+                        start = Offset.Zero,
+                        end = Offset(size.width, size.height * 0.65f),
+                    )
+                    onDrawBehind { drawRect(sheen) }
+                })
+            }
             Box(
                 Modifier
                     .matchParentSize()
@@ -343,7 +400,7 @@ fun BottomGlassBar(
 }
 
 /**
- * 主操作：薄荷渐变胶囊。按下时轻微缩放，松开回弹；不使用投影。
+ * 主操作：薄荷渐变胶囊。按下时轻微缩放，松开缓出复位。
  */
 @Composable
 fun PrimaryAction(
@@ -354,23 +411,12 @@ fun PrimaryAction(
     enabled: Boolean = true,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.965f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
-        label = "primaryScale",
-    )
     val scheme = MaterialTheme.colorScheme
-    val reducedMotion = LocalReducedMotion.current
     Box(
         modifier = modifier
             .heightIn(min = 52.dp)
+            .pressFeedback(interactionSource, enabled)
             .graphicsLayer {
-                scaleX = if (reducedMotion) 1f else scale
-                scaleY = if (reducedMotion) 1f else scale
                 alpha = if (enabled) 1f else 0.42f
             }
             .clip(CircleShape)
@@ -389,7 +435,7 @@ fun PrimaryAction(
                 indication = ripple(color = scheme.onPrimary),
                 onClick = onClick,
             )
-            .padding(horizontal = 22.dp),
+            .padding(horizontal = 22.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -408,7 +454,7 @@ fun PrimaryAction(
                 text,
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = scheme.onPrimary,
-                maxLines = 1,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }
     }
@@ -423,22 +469,12 @@ fun SecondaryAction(
     enabled: Boolean = true,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.965f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
-        label = "secondaryScale",
-    )
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = modifier
             .heightIn(min = 48.dp)
+            .pressFeedback(interactionSource, enabled)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
                 alpha = if (enabled) 1f else 0.42f
             }
             .clip(CircleShape)
@@ -451,7 +487,7 @@ fun SecondaryAction(
                 indication = ripple(color = scheme.primary),
                 onClick = onClick,
             )
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -467,7 +503,7 @@ fun SecondaryAction(
             text,
             style = MaterialTheme.typography.labelLarge,
             color = scheme.onSurface,
-            maxLines = 1,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
 }
@@ -485,9 +521,11 @@ fun <T> SegmentedOptions(
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = PanelShape.card
+    val reduced = LocalReducedMotion.current
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .selectableGroup()
             .clip(shape)
             .background(scheme.surfaceContainerLow.copy(alpha = 0.55f))
             .border(1.dp, scheme.outlineVariant.copy(alpha = 0.7f), shape)
@@ -495,28 +533,33 @@ fun <T> SegmentedOptions(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         options.forEach { option ->
+            val interaction = remember { MutableInteractionSource() }
             val isSelected = option.value == selected
             val background by animateColorAsState(
                 targetValue = if (isSelected) scheme.primary else Color.Transparent,
-                animationSpec = tween(Motion.Fast, easing = Motion.EaseOutQuart),
+                animationSpec = tween(if (reduced) 0 else Motion.Fast, easing = Motion.EaseOutQuart),
                 label = "segmentBackground",
             )
             val foreground by animateColorAsState(
                 targetValue = if (isSelected) scheme.onPrimary else scheme.onSurfaceVariant,
-                animationSpec = tween(Motion.Fast, easing = Motion.EaseOutQuart),
+                animationSpec = tween(if (reduced) 0 else Motion.Fast, easing = Motion.EaseOutQuart),
                 label = "segmentForeground",
             )
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(if (compact) 40.dp else 44.dp)
+                    .heightIn(min = 48.dp)
+                    .pressFeedback(interaction)
                     .clip(RoundedCornerShape(10.dp))
                     .background(background)
                     .selectable(
                         selected = isSelected,
                         role = Role.RadioButton,
+                        interactionSource = interaction,
+                        indication = ripple(color = foreground),
                         onClick = { onSelect(option.value) },
-                    ),
+                    )
+                    .padding(horizontal = if (compact) 4.dp else 8.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -524,7 +567,7 @@ fun <T> SegmentedOptions(
                     style = MaterialTheme.typography.labelLarge,
                     color = foreground,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
         }
@@ -688,7 +731,7 @@ fun SkeletonBox(
     val extended = AppTheme.extended
     val reducedMotion = LocalReducedMotion.current
     val sweep = if (reducedMotion) {
-        0.5f
+        null
     } else {
         val transition = rememberInfiniteTransition(label = "skeleton")
         transition.animateFloat(
@@ -698,12 +741,12 @@ fun SkeletonBox(
                 animation = tween(1600, easing = androidx.compose.animation.core.LinearEasing),
             ),
             label = "sweep",
-        ).value
+        )
     }
     Box(modifier.clip(shape).background(extended.skeleton)) {
         Canvas(Modifier.matchParentSize()) {
             val width = size.width
-            val start = -width * 0.6f + sweep * width * 1.8f
+            val start = -width * 0.6f + (sweep?.value ?: 0.5f) * width * 1.8f
             drawRect(
                 brush = Brush.linearGradient(
                     colors = listOf(

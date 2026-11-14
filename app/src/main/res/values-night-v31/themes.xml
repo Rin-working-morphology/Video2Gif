@@ -8,6 +8,7 @@
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowSplashScreenBackground">@color/app_background</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_brand</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_motion</item>
+        <item name="android:windowSplashScreenAnimationDuration">480</item>
     </style>
 </resources>

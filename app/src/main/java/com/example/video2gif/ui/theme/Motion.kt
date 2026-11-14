@@ -7,6 +7,9 @@ import androidx.compose.animation.core.CubicBezierEasing
  * 曲线统一为指数缓出（quart/quint），不使用回弹——工具类界面不应该让人等编排。
  */
 object Motion {
+    const val Press = 90
+    const val Release = 180
+    const val SplashExit = 220
     /** 按下、切换、图标旋转。 */
     const val Fast = 140
     /** 常规状态变化、面板展开。 */

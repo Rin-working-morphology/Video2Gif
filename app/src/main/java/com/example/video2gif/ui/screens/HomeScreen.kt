@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -46,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +84,7 @@ import com.example.video2gif.ui.components.PrimaryAction
 import com.example.video2gif.ui.components.SkeletonBox
 import com.example.video2gif.ui.components.Sparkle
 import com.example.video2gif.ui.components.entrance
+import com.example.video2gif.ui.components.pressFeedback
 import com.example.video2gif.ui.theme.AppTheme
 import com.example.video2gif.ui.theme.Motion
 import com.example.video2gif.ui.theme.PanelShape
@@ -94,31 +98,32 @@ import com.example.video2gif.ui.theme.PanelShape
 @Composable
 fun HomeScreen(vm: AppViewModel) {
     val draft = vm.draft
-    val run by vm.run.collectAsStateWithLifecycle()
     var confirmReplace by remember { mutableStateOf(false) }
-    val remaining = (MAX_BATCH_ITEMS - (draft?.items?.size ?: 0)).coerceAtLeast(1)
+    var replaceOnPick by rememberSaveable { mutableStateOf(false) }
     val pickMultiple = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(remaining.coerceAtLeast(2)),
-    ) { uris -> if (uris.isNotEmpty()) vm.importVideos(uris) }
-    val pickSingle = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri -> if (uri != null) vm.importVideos(listOf(uri)) }
-    val launchPicker = {
-        if (remaining == 1) {
-            pickSingle.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
-        } else {
-            pickMultiple.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
-            )
+        ActivityResultContracts.PickMultipleVisualMedia(MAX_BATCH_ITEMS),
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            if (replaceOnPick) vm.discardDraft()
+            vm.importVideos(uris)
         }
+        replaceOnPick = false
+    }
+    val launchPicker = {
+        pickMultiple.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
+        )
     }
 
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         AuroraBackdrop(Modifier.fillMaxSize())
+        val fontScale = LocalDensity.current.fontScale
+        val scrollContent = maxHeight < 600.dp || fontScale > 1.3f
 
         Column(
             Modifier
                 .fillMaxSize()
+                .then(if (scrollContent) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                 .statusBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -127,19 +132,23 @@ fun HomeScreen(vm: AppViewModel) {
             // 主视觉区：卡片占可用高度的 62%–78%，其余留给装饰与星芒。
             BoxWithConstraints(
                 Modifier
-                    .weight(1f)
+                    .then(
+                        if (scrollContent) Modifier.height(400.dp + 100.dp * (fontScale - 1f).coerceAtLeast(0f))
+                        else Modifier.weight(1f),
+                    )
                     .widthIn(max = 720.dp)
                     .fillMaxWidth()
                     .entrance(),
             ) {
                 // 大字号下卡片跟着长一点，给两行标题与说明留出空间。
-                val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
-                val cardWidth: Dp = (maxWidth * 0.60f * (1f + (fontScale - 1f) * 0.25f))
-                    .coerceIn(216.dp, 320.dp)
+                val cardWidth: Dp = (maxWidth * 0.66f * (1f + (fontScale - 1f) * 0.35f))
+                    .coerceIn(minOf(216.dp, maxWidth - 32.dp), minOf(360.dp, maxWidth - 32.dp))
                 val cardHeight: Dp = (maxHeight * 0.78f * (1f + (fontScale - 1f) * 0.35f))
-                    .coerceIn(320.dp, maxHeight)
+                    .coerceIn(minOf(320.dp, maxHeight), maxHeight)
 
                 OrnamentField(Modifier.fillMaxSize())
+                // 轨道在主卡片后方穿行，避免划过标题、预览与按钮。
+                OrbitOverlay(Modifier.fillMaxSize(), alpha = 0.22f)
 
                 if (draft == null) {
                     EmptyHeroCard(
@@ -158,12 +167,9 @@ fun HomeScreen(vm: AppViewModel) {
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
-
-                // 轨道线压在卡片之上，还原参考图“光环绕过玻璃”的层次。
-                OrbitOverlay(Modifier.fillMaxSize(), alpha = 0.26f)
             }
 
-            HomeStatusSection(vm = vm, draftExists = draft != null) { launchPicker() }
+            HomeStatusSection(vm = vm, draftExists = draft != null) { confirmReplace = true }
 
             // 底部落在明亮的极光带上，文字放进一枚低饱和小胶囊里保证对比度。
             Box(
@@ -198,7 +204,8 @@ fun HomeScreen(vm: AppViewModel) {
                 TextButton(
                     onClick = {
                         confirmReplace = false
-                        vm.discardDraft()
+                        // 选择器取消时保留草稿，收到新视频后才真正替换。
+                        replaceOnPick = true
                         launchPicker()
                     },
                 ) { Text("替换草稿") }
@@ -279,6 +286,7 @@ private fun EmptyHeroCard(
         modifier = modifier
             .width(width)
             .height(height)
+            .pressFeedback(interaction, enabled = !importing, pressedScale = 0.99f)
             .clip(PanelShape.panel)
             .clickable(
                 enabled = !importing,
@@ -288,7 +296,7 @@ private fun EmptyHeroCard(
                 onClick = onClick,
             )
             .semantics {
-                contentDescription = "选择视频，先预览效果，确认后再转换"
+                contentDescription = if (importing) "正在读取视频信息" else "选择视频，先预览效果，确认后再转换"
             },
         ambient = true,
     ) {
@@ -355,14 +363,16 @@ private fun DraftHeroCard(
     val thumb = first?.let { vm.thumbnails[it.id] }
     val extended = AppTheme.extended
 
+    val interaction = remember { MutableInteractionSource() }
     GlassPanel(
         modifier = modifier
             .width(width)
             .height(height)
+            .pressFeedback(interaction, pressedScale = 0.99f)
             .clip(PanelShape.panel)
             .clickable(
                 role = Role.Button,
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interaction,
                 indication = ripple(color = MaterialTheme.colorScheme.primary),
                 onClick = onClick,
             )

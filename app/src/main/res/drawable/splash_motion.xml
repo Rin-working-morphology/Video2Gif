@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="288dp" android:height="288dp"
+            android:viewportWidth="108" android:viewportHeight="108">
+            <!-- 延续桌面图标的胶片与播放符号，全部位于系统遮罩安全区。 -->
+            <group android:name="film" android:pivotX="54" android:pivotY="54">
+                <path android:fillColor="@color/splash_accent" android:fillAlpha="0.12"
+                    android:pathData="M30,32h48a6,6 0 0 1 6,6v32a6,6 0 0 1 -6,6h-48a6,6 0 0 1 -6,-6v-32a6,6 0 0 1 6,-6z" />
+                <path android:name="edge" android:strokeColor="@color/splash_accent"
+                    android:strokeWidth="1.2" android:strokeLineCap="round"
+                    android:fillColor="@android:color/transparent"
+                    android:pathData="M54,32H78a6,6 0 0 1 6,6v32a6,6 0 0 1 -6,6H30a6,6 0 0 1 -6,-6V38a6,6 0 0 1 6,-6Z" />
+                <path android:fillColor="@color/splash_accent" android:fillAlpha="0.5"
+                    android:pathData="M28,40h4v4h-4zM28,52h4v4h-4zM28,64h4v4h-4zM76,40h4v4h-4zM76,52h4v4h-4zM76,64h4v4h-4z" />
+                <path android:name="play" android:fillColor="@color/splash_accent"
+                    android:pathData="M47,44L64,54L47,64z" />
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="edge">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="trimPathEnd"
+                android:valueFrom="0.15" android:valueTo="1" android:valueType="floatType"
+                android:duration="480" android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+    <target android:name="play">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="fillAlpha"
+                android:valueFrom="0.35" android:valueTo="1" android:valueType="floatType"
+                android:duration="320" android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+</animated-vector>

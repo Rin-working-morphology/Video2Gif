@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="app_background">#FFFFFFFF</color>
+    <color name="app_background">#FFF5FCFB</color>
+    <color name="splash_accent">#FF007167</color>
     <!-- 自适应图标背景：取新图标边缘的深青石墨色，仅用于视差留白。 -->
     <color name="ic_launcher_brand_background">#FF0D2327</color>
 </resources>

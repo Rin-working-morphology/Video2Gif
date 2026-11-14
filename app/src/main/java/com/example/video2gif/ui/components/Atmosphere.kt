@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -56,7 +57,7 @@ fun AuroraBackdrop(
     val reducedMotion = LocalReducedMotion.current
 
     val phase = if (reducedMotion) {
-        0.5f
+        null
     } else {
         val transition = rememberInfiniteTransition(label = "auroraDrift")
         transition.animateFloat(
@@ -67,7 +68,7 @@ fun AuroraBackdrop(
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "drift",
-        ).value
+        )
     }
 
     val crestAlpha = (if (dark) 0.40f else 0.30f) * intensity
@@ -76,11 +77,12 @@ fun AuroraBackdrop(
 
     Canvas(
         modifier = modifier.graphicsLayer {
-            // 只做合成层变换：不触发重绘，长周期漂移几乎不耗 GPU。
-            scaleX = 1.05f + phase * 0.03f
-            scaleY = 1.03f + phase * 0.02f
-            translationX = -size.width * 0.012f * phase
-            translationY = size.height * 0.008f * (phase - 0.5f)
+            // 动画值在合成阶段读取，避免逐帧重组与重新记录背景绘制。
+            val drift = phase?.value ?: 0.5f
+            scaleX = 1.05f + drift * 0.03f
+            scaleY = 1.03f + drift * 0.02f
+            translationX = -size.width * 0.012f * drift
+            translationY = size.height * 0.008f * (drift - 0.5f)
         },
     ) {
         val w = size.width
@@ -108,6 +110,18 @@ fun AuroraBackdrop(
                 endY = h * 0.30f,
             ),
         )
+        // 同色相的宽幅反光沿曲面收束，光带有明暗厚度而不是均匀色块。
+        clipPath(crest) {
+            drawRect(Brush.linearGradient(
+                0f to extended.auroraDeep.copy(alpha = crestAlpha * 0.25f),
+                0.34f to extended.auroraPale.copy(alpha = crestAlpha * 0.42f),
+                0.55f to Color.Transparent,
+                0.82f to extended.auroraCore.copy(alpha = crestAlpha * 0.30f),
+                1f to Color.Transparent,
+                start = Offset.Zero,
+                end = Offset(w, h * 0.16f),
+            ))
+        }
         // 光冠下缘一条极细的亮边，让“光带”有明确的轮廓而不是一团雾。
         val crestEdge = Path().apply {
             moveTo(0f, h * 0.145f)
@@ -372,7 +386,11 @@ fun OrnamentField(
             val h = size.height
 
             if (showBars) {
-                // 左列：三层不同亮度，模仿参考图里错落的胶片。
+                // 叠放的宽薄片与窄亮边，轮廓保留在主卡片两侧。
+                filmBar(w * 0.13f, h * 0.22f, w * 0.19f, h * 0.56f, extended.filmC, 0.65f * intensity)
+                filmBar(w * 0.66f, h * 0.12f, w * 0.20f, h * 0.55f, extended.auroraDeep, 0.42f * intensity)
+                filmBar(w * 0.72f, h * 0.56f, w * 0.12f, h * 0.27f, extended.auroraCore, 0.28f * intensity)
+                // 两侧短条沿用相同材质。
                 filmBar(w * 0.085f, h * 0.16f, 7.dp.toPx(), h * 0.19f, extended.filmC, 0.85f * intensity)
                 filmBar(w * 0.085f, h * 0.40f, 12.dp.toPx(), h * 0.11f, extended.filmB, 0.95f * intensity)
                 filmBar(w * 0.085f, h * 0.60f, 5.dp.toPx(), h * 0.16f, extended.filmA, 0.8f * intensity)
@@ -414,13 +432,29 @@ private fun DrawScope.filmBar(
     color: Color,
     alpha: Float,
 ) {
+    val corner = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
     drawRoundRect(
-        brush = Brush.verticalGradient(
-            colors = listOf(color.copy(alpha = alpha), color.copy(alpha = alpha * 0.25f)),
+        brush = Brush.linearGradient(
+            0f to lerpColor(color, Color.White, 0.24f).copy(alpha = alpha * 0.80f),
+            0.32f to color.copy(alpha = alpha * 0.48f),
+            0.70f to color.copy(alpha = alpha * 0.90f),
+            1f to color.copy(alpha = alpha * 0.22f),
+            start = Offset(x, y),
+            end = Offset(x + widthPx, y + heightPx),
         ),
         topLeft = Offset(x, y),
         size = Size(widthPx, heightPx),
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(widthPx / 2f, widthPx / 2f),
+        cornerRadius = corner,
+    )
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = alpha * 0.26f), Color.Transparent),
+            startY = y, endY = y + heightPx * 0.8f,
+        ),
+        topLeft = Offset(x, y),
+        size = Size(widthPx, heightPx),
+        cornerRadius = corner,
+        style = Stroke(width = 0.5.dp.toPx()),
     )
 }
 
@@ -461,8 +495,7 @@ private fun DrawScope.drawCheckerStrip(origin: Offset, color: Color, alpha: Floa
 }
 
 /**
- * 轨道线：两条细椭圆弧，从卡片前方掠过。这是参考图里最强的“宇宙感”来源，
- * 因此用 1dp 线宽、低透明度绘制在内容之上，但不拦截任何触摸。
+ * 轨道线：低透明度细椭圆弧，位于主卡片后方，不穿过正文与操作。
  */
 @Composable
 fun OrbitOverlay(

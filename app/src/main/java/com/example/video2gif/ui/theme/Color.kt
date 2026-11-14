@@ -205,6 +205,6 @@ fun ExtendedColors.harmonizeWith(accent: Color): ExtendedColors = copy(
     auroraDeep = lerp(accent, auroraDeep, 0.35f),
     auroraPale = lerp(accent, auroraPale, 0.55f),
     glow = lerp(accent, glow, 0.6f),
-    glassTint = lerp(accent, glassTint, 0.25f),
+    glassTint = lerp(accent, glassTint, 0.25f).copy(alpha = glassTint.alpha),
     sparkle = lerp(accent, sparkle, 0.45f),
 )
