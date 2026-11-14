@@ -37,11 +37,11 @@ import com.example.video2gif.ui.theme.Motion
 import kotlin.math.min
 
 /*
- * 氛围层：极光渐变 + 几何装饰。
+ * 氛围层：水彩色块 + 几何装饰。
  *
  * 规则：
  * - 只做背景与装饰，从不承载文字或接收触摸。
- * - 极光用一次性绘制的静态 Canvas，靠 graphicsLayer 做慢速漂移，避免每帧重绘渐变。
+ * - 极光用一次性绘制的静态 Canvas，靠 graphicsLayer 做慢速漂移，避免每帧重绘背景。
  * - 系统关闭动画时，所有循环动画停在固定相位，装饰仍然可见。
  */
 
@@ -71,10 +71,6 @@ fun AuroraBackdrop(
         )
     }
 
-    val crestAlpha = (if (dark) 0.40f else 0.30f) * intensity
-    val coreAlpha = (if (dark) 0.42f else 0.32f) * intensity
-    val hazeAlpha = (if (dark) 0.24f else 0.16f) * intensity
-
     Canvas(
         modifier = modifier.graphicsLayer {
             // 动画值在合成阶段读取，避免逐帧重组与重新记录背景绘制。
@@ -87,79 +83,62 @@ fun AuroraBackdrop(
     ) {
         val w = size.width
         val h = size.height
+        // 石墨底保持纯色。极光由几块半透明的平涂色块叠出水彩渗色，
+        // 避免连续渐变把深色页面变成“发光特效”。
         drawRect(background)
 
-        // 顶部光冠：一片从屏幕上方压下来的薄荷光带。
         val crest = Path().apply {
             moveTo(0f, -h * 0.04f)
             lineTo(w, -h * 0.04f)
-            lineTo(w, h * 0.17f)
-            cubicTo(w * 0.82f, h * 0.30f, w * 0.62f, h * 0.04f, w * 0.38f, h * 0.115f)
-            cubicTo(w * 0.22f, h * 0.165f, w * 0.10f, h * 0.075f, 0f, h * 0.145f)
+            lineTo(w, h * 0.16f)
+            cubicTo(w * 0.80f, h * 0.26f, w * 0.60f, h * 0.05f, w * 0.38f, h * 0.105f)
+            cubicTo(w * 0.22f, h * 0.15f, w * 0.10f, h * 0.07f, 0f, h * 0.14f)
             close()
         }
-        drawPath(
-            path = crest,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    extended.auroraCrest.copy(alpha = crestAlpha),
-                    extended.auroraCrest.copy(alpha = crestAlpha * 0.55f),
-                    extended.auroraCrest.copy(alpha = 0f),
-                ),
-                startY = 0f,
-                endY = h * 0.30f,
-            ),
-        )
-        // 同色相的宽幅反光沿曲面收束，光带有明暗厚度而不是均匀色块。
+        val crestAlpha = (if (dark) 0.46f else 0.26f) * intensity
+        val coreAlpha = (if (dark) 0.38f else 0.22f) * intensity
+
+        // 主色块：边缘清晰、内部平整，贴近参考图的纸上水彩构图。
+        drawPath(crest, extended.auroraCore.copy(alpha = crestAlpha))
+
+        // 宽幅色相过渡模拟水彩相互洇开的效果，避免出现孤立的聚光点。
         clipPath(crest) {
-            drawRect(Brush.linearGradient(
-                0f to extended.auroraDeep.copy(alpha = crestAlpha * 0.25f),
-                0.34f to extended.auroraPale.copy(alpha = crestAlpha * 0.42f),
-                0.55f to Color.Transparent,
-                0.82f to extended.auroraCore.copy(alpha = crestAlpha * 0.30f),
-                1f to Color.Transparent,
-                start = Offset.Zero,
-                end = Offset(w, h * 0.16f),
-            ))
+            drawRect(
+                brush = Brush.linearGradient(
+                    0f to extended.auroraDeep.copy(alpha = if (dark) 0.30f else 0.12f),
+                    0.24f to extended.auroraCore.copy(alpha = if (dark) 0.08f else 0.04f),
+                    0.54f to extended.auroraCrest.copy(alpha = if (dark) 0.32f else 0.14f),
+                    0.78f to extended.auroraPale.copy(alpha = if (dark) 0.48f else 0.22f),
+                    1f to extended.auroraCore.copy(alpha = if (dark) 0.10f else 0.04f),
+                    start = Offset(w * 0.02f, h * 0.14f),
+                    end = Offset(w * 0.96f, h * 0.04f),
+                ),
+            )
+            drawRect(
+                brush = Brush.linearGradient(
+                    0f to Color.Transparent,
+                    0.42f to extended.auroraPale.copy(alpha = if (dark) 0.22f else 0.10f),
+                    0.72f to extended.auroraCore.copy(alpha = if (dark) 0.22f else 0.10f),
+                    1f to Color.Transparent,
+                    start = Offset(w * 0.28f, -h * 0.04f),
+                    end = Offset(w * 0.74f, h * 0.18f),
+                ),
+            )
         }
-        // 光冠下缘一条极细的亮边，让“光带”有明确的轮廓而不是一团雾。
+
+        // 光冠下缘只保留一条纤细轮廓，给色块一个安静的收口。
         val crestEdge = Path().apply {
-            moveTo(0f, h * 0.145f)
-            cubicTo(w * 0.10f, h * 0.075f, w * 0.22f, h * 0.165f, w * 0.38f, h * 0.115f)
-            cubicTo(w * 0.62f, h * 0.04f, w * 0.82f, h * 0.30f, w, h * 0.17f)
+            moveTo(0f, h * 0.14f)
+            cubicTo(w * 0.10f, h * 0.07f, w * 0.22f, h * 0.15f, w * 0.38f, h * 0.105f)
+            cubicTo(w * 0.60f, h * 0.05f, w * 0.80f, h * 0.26f, w, h * 0.16f)
         }
         drawPath(
             path = crestEdge,
-            color = extended.auroraPale.copy(alpha = crestAlpha * 0.55f),
+            color = extended.auroraPale.copy(alpha = crestAlpha * 0.42f),
             style = Stroke(width = 1.dp.toPx()),
         )
 
-        // 右上方的高光核心，让光冠有一处更亮的落点。
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    extended.auroraPale.copy(alpha = crestAlpha * 0.85f),
-                    extended.auroraCore.copy(alpha = crestAlpha * 0.35f),
-                    extended.auroraCore.copy(alpha = 0f),
-                ),
-                center = Offset(w * 0.86f, h * 0.03f),
-                radius = w * 0.78f,
-            ),
-        )
-
-        // 底部波光：与顶部对称，颜色更偏青；左下角再补一颗亮核，
-        // 让页面底部有重量，而不是一条均匀的暗带。
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    extended.auroraCrest.copy(alpha = coreAlpha * 0.88f),
-                    extended.auroraCore.copy(alpha = coreAlpha * 0.34f),
-                    extended.auroraCore.copy(alpha = 0f),
-                ),
-                center = Offset(w * 0.16f, h * 1.02f),
-                radius = w * 0.72f,
-            ),
-        )
+        // 底部波光同样使用平涂色块，避免深色主题底部泛白。
         val waveTop = h * 0.66f
         val wave = Path().apply {
             moveTo(0f, h)
@@ -169,19 +148,31 @@ fun AuroraBackdrop(
             lineTo(w, h)
             close()
         }
-        drawPath(
-            path = wave,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    extended.auroraCore.copy(alpha = 0f),
-                    extended.auroraDeep.copy(alpha = coreAlpha * 0.45f),
-                    extended.auroraCrest.copy(alpha = coreAlpha * 0.95f),
+        drawPath(wave, extended.auroraCore.copy(alpha = coreAlpha))
+        clipPath(wave) {
+            drawRect(
+                brush = Brush.linearGradient(
+                    0f to extended.auroraDeep.copy(alpha = if (dark) 0.22f else 0.10f),
+                    0.28f to extended.auroraCore.copy(alpha = if (dark) 0.06f else 0.03f),
+                    0.56f to extended.auroraPale.copy(alpha = if (dark) 0.42f else 0.18f),
+                    0.82f to extended.auroraCrest.copy(alpha = if (dark) 0.26f else 0.12f),
+                    1f to extended.auroraDeep.copy(alpha = if (dark) 0.24f else 0.10f),
+                    start = Offset(0f, h * 0.94f),
+                    end = Offset(w, h * 0.84f),
                 ),
-                startY = waveTop,
-                endY = h,
-            ),
-        )
-        // 波峰轮廓线：一条随波起伏的薄荷细线。
+            )
+            drawRect(
+                brush = Brush.linearGradient(
+                    0f to Color.Transparent,
+                    0.38f to extended.auroraCrest.copy(alpha = if (dark) 0.20f else 0.08f),
+                    0.68f to extended.auroraPale.copy(alpha = if (dark) 0.18f else 0.08f),
+                    1f to Color.Transparent,
+                    start = Offset(w * 0.12f, h * 0.82f),
+                    end = Offset(w * 0.86f, h),
+                ),
+            )
+        }
+
         val waveEdge = Path().apply {
             moveTo(0f, waveTop + h * 0.06f)
             cubicTo(w * 0.22f, waveTop - h * 0.05f, w * 0.46f, waveTop + h * 0.10f, w * 0.68f, waveTop + h * 0.045f)
@@ -189,50 +180,10 @@ fun AuroraBackdrop(
         }
         drawPath(
             path = waveEdge,
-            color = extended.auroraCrest.copy(alpha = coreAlpha * 0.70f),
+            color = extended.auroraCrest.copy(alpha = coreAlpha * 0.52f),
             style = Stroke(width = 1.2.dp.toPx()),
         )
-        // 波峰上的一层薄光，给底边一点通透感。
-        drawPath(
-            path = wave,
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    extended.auroraPale.copy(alpha = coreAlpha * 0.18f),
-                    extended.auroraPale.copy(alpha = 0f),
-                ),
-                center = Offset(w * 0.7f, h * 0.95f),
-                radius = w * 0.8f,
-            ),
-        )
 
-        // 中段薄雾，避免上下两块光在中间断开。
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    extended.auroraDeep.copy(alpha = hazeAlpha * 0.35f),
-                    extended.auroraDeep.copy(alpha = 0f),
-                ),
-                center = Offset(w * 0.12f, h * 0.58f),
-                radius = w * 0.62f,
-            ),
-        )
-
-        if (dark) {
-            // 只在画面中段压暗一层，模拟极光之间更深的夜空；
-            // 上下两端保持亮，避免把光冠与波光一起压灰。
-            drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        background.copy(alpha = 0.42f),
-                        background.copy(alpha = 0.30f),
-                        Color.Transparent,
-                    ),
-                    startY = h * 0.14f,
-                    endY = h * 0.86f,
-                ),
-            )
-        }
     }
 }
 

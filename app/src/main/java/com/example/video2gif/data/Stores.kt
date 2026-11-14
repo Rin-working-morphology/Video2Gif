@@ -7,7 +7,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.video2gif.domain.AppSettings
-import com.example.video2gif.domain.BatchDraft
 import com.example.video2gif.domain.RunState
 import com.example.video2gif.domain.ThemeMode
 import kotlinx.coroutines.flow.Flow
@@ -39,22 +38,9 @@ class SettingsStore(private val context: Context) {
         dataStore.edit { it[DYNAMIC_COLOR] = enabled }
     }
 
-    val draftJson: Flow<String?> = dataStore.data
-        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { it[DRAFT_JSON] }
-
-    suspend fun saveDraft(draft: BatchDraft) {
-        dataStore.edit { it[DRAFT_JSON] = JsonCodec.draftToJson(draft) }
-    }
-
-    suspend fun clearDraft() {
-        dataStore.edit { it.remove(DRAFT_JSON) }
-    }
-
     private companion object {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
-        val DRAFT_JSON = stringPreferencesKey("draft_json")
     }
 }
 

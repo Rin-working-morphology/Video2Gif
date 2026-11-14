@@ -1,6 +1,5 @@
 package com.example.video2gif.data
 
-import com.example.video2gif.domain.BatchDraft
 import com.example.video2gif.domain.ConversionRecipe
 import com.example.video2gif.domain.CropAspect
 import com.example.video2gif.domain.CropSpec
@@ -10,13 +9,11 @@ import com.example.video2gif.domain.LoopMode
 import com.example.video2gif.domain.QualityPreset
 import com.example.video2gif.domain.RunItem
 import com.example.video2gif.domain.RunState
-import com.example.video2gif.domain.SharedParam
 import com.example.video2gif.domain.SourceVideo
-import com.example.video2gif.domain.VideoItemDraft
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** 草稿与任务快照的 JSON 编码。只保存可恢复的字段，缩略图与调色板会重新生成。 */
+/** 转换任务快照的 JSON 编码。 */
 object JsonCodec {
 
     fun sourceToJson(source: SourceVideo): JSONObject = JSONObject().apply {
@@ -107,66 +104,6 @@ object JsonCodec {
             )
         } catch (_: Exception) {
             fallback
-        }
-    }
-
-    fun draftToJson(draft: BatchDraft): String {
-        val root = JSONObject()
-        root.put("id", draft.id)
-        root.put("updatedAt", draft.updatedAt)
-        root.put("defaults", recipeToJson(draft.defaults))
-        val items = JSONArray()
-        draft.items.forEach { item ->
-            items.put(JSONObject().apply {
-                put("id", item.id)
-                put("uri", item.uri)
-                put("name", item.name)
-                put("recipe", recipeToJson(item.recipe))
-                item.source?.let { put("source", sourceToJson(it)) }
-                val overrides = JSONArray()
-                item.overrides.forEach { overrides.put(it.name) }
-                put("overrides", overrides)
-                item.error?.let { put("error", it) }
-            })
-        }
-        root.put("items", items)
-        return root.toString()
-    }
-
-    fun draftFromJson(raw: String?): BatchDraft? {
-        if (raw.isNullOrBlank()) return null
-        return try {
-            val root = JSONObject(raw)
-            val items = root.optJSONArray("items") ?: JSONArray()
-            val parsed = ArrayList<VideoItemDraft>(items.length())
-            for (i in 0 until items.length()) {
-                val item = items.getJSONObject(i)
-                val overrides = HashSet<SharedParam>()
-                item.optJSONArray("overrides")?.let { array ->
-                    for (j in 0 until array.length()) {
-                        runCatching { SharedParam.valueOf(array.getString(j)) }.getOrNull()
-                            ?.let { overrides += it }
-                    }
-                }
-                parsed += VideoItemDraft(
-                    id = item.getString("id"),
-                    uri = item.getString("uri"),
-                    name = item.optString("name", "视频"),
-                    source = sourceFromJson(item.optJSONObject("source")),
-                    recipe = recipeFromJson(item.optJSONObject("recipe")),
-                    overrides = overrides,
-                    error = item.optString("error").takeIf { it.isNotBlank() && it != "null" },
-                )
-            }
-            if (parsed.isEmpty()) return null
-            BatchDraft(
-                id = root.optString("id", "batch-${System.currentTimeMillis()}"),
-                defaults = recipeFromJson(root.optJSONObject("defaults")),
-                items = parsed,
-                updatedAt = root.optLong("updatedAt", System.currentTimeMillis()),
-            )
-        } catch (_: Exception) {
-            null
         }
     }
 

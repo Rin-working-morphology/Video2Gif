@@ -16,7 +16,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.video2gif.data.JsonCodec
 import com.example.video2gif.data.SettingsStore
 import com.example.video2gif.domain.AppSettings
 import com.example.video2gif.domain.BatchDraft
@@ -50,7 +49,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -126,34 +124,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private var analysisJob: Job? = null
     private var batchAnalysisJob: Job? = null
     private var previewGeneration = 0
-    private var saveJob: Job? = null
-    private var loadedDraft = false
-
-    init {
-        viewModelScope.launch {
-            val raw = runCatching { settingsStore.draftJson.first() }.getOrNull()
-            if (raw != null && !loadedDraft) {
-                loadedDraft = true
-                val restored = JsonCodec.draftFromJson(raw)
-                if (restored != null) {
-                    draft = restored
-                    activeIndex = 0
-                    restored.items.forEach { item ->
-                        val quick = item.recipe.outputSpec(item.source)?.let {
-                            SizeEstimator.quick(it, item.recipe.colorCount)
-                        }
-                        analyses[item.id] = ItemAnalysis(
-                            key = analysisKey(item),
-                            estimate = quick,
-                            analyzing = item.source != null,
-                        )
-                    }
-                    ensureThumbnails(restored.items)
-                }
-            }
-        }
-    }
-
     // ----- 设置 -----
 
     fun setThemeMode(mode: ThemeMode) {
@@ -222,14 +192,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ----- 导入 -----
 
-    fun importVideos(uris: List<Uri>) {
+    fun importVideos(uris: List<Uri>, startNewBatch: Boolean = false) {
         if (uris.isEmpty() || isImporting) return
-        val current = draft
+        val current = if (startNewBatch) null else draft
         val room = MAX_BATCH_ITEMS - (current?.items?.size ?: 0)
         if (uris.size > room) {
             notice = "每批最多 $MAX_BATCH_ITEMS 个视频，请减少选择"
             return
         }
+        // 首页选择成功后才开始新批次；取消选择不会改动当前编辑内容。
+        if (startNewBatch) discardDraft()
         isImporting = true
         viewModelScope.launch {
             val defaults = current?.defaults ?: ConversionRecipe()
@@ -259,7 +231,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             activeIndex = batch.items.indexOfFirst { it.source != null }
                 .let { if (it < 0) 0 else it }
             isImporting = false
-            saveDraftNow()
             val failed = results.count { it.first.error != null }
             if (failed > 0) {
                 notice = if (failed == results.size) {
@@ -386,13 +357,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun continueDraft() {
-        val batch = draft ?: return
-        if (batch.items.isEmpty()) return
-        activeIndex = batch.items.indexOfFirst { it.source != null }.coerceAtLeast(0)
-        navigate(Screen.Editor)
-    }
-
     fun discardDraft() {
         stopPlayback()
         releasePreview()
@@ -404,7 +368,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         thumbnails.clear()
         timelineStrips.clear()
         analyses.clear()
-        viewModelScope.launch { settingsStore.clearDraft() }
         while (stack.size > 1) stack.removeAt(stack.lastIndex)
     }
 
@@ -425,7 +388,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (activeItem?.source != null) {
             ensureActiveResources()
         }
-        saveDraftSoon()
     }
 
     fun selectNextItem() {
@@ -480,7 +442,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         scheduleAnalysis()
         if (cropEditing) refreshCropSource()
         if (isPlaying) restartPlayback() else requestPreviewFrame()
-        saveDraftSoon()
     }
 
     fun setQuality(preset: QualityPreset) {
@@ -958,7 +919,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             playheadMs = activeItem?.recipe?.trimStartMs ?: 0L
             if (activeItem?.source != null) ensureActiveResources()
         }
-        saveDraftSoon()
     }
 
     /** 统一参数：默认只写入没有单独覆盖的项，覆盖模式会清除对应覆盖标记。 */
@@ -1019,7 +979,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             item.copy(recipe = recipe, overrides = overrides)
         }
         draft = batch.copy(defaults = defaults, items = items, updatedAt = System.currentTimeMillis())
-        saveDraftSoon()
         ensureBatchAnalyses()
     }
 
@@ -1041,7 +1000,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             item.copy(recipe = recipe, overrides = emptySet())
         }
         draft = batch.copy(items = items, updatedAt = System.currentTimeMillis())
-        saveDraftSoon()
         ensureBatchAnalyses()
     }
 
@@ -1069,7 +1027,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         batchAnalysisJob?.cancel()
         val started = ConversionEngine.begin(app, batch)
         if (started) {
-            saveDraftNow()
             navigate(Screen.Progress)
         } else {
             notice = "无法开始转换，请稍后再试"
@@ -1102,26 +1059,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun outputSpecFor(item: VideoItemDraft?): OutputSpec? =
         if (item == null) null else item.recipe.outputSpec(item.source)
-
-    // ----- 草稿持久化 -----
-
-    private fun saveDraftSoon() {
-        saveJob?.cancel()
-        saveJob = viewModelScope.launch {
-            delay(400)
-            persistDraft()
-        }
-    }
-
-    private fun saveDraftNow() {
-        saveJob?.cancel()
-        viewModelScope.launch { persistDraft() }
-    }
-
-    private suspend fun persistDraft() {
-        val batch = draft ?: return
-        runCatching { settingsStore.saveDraft(batch) }
-    }
 
     override fun onCleared() {
         stopPlayback()

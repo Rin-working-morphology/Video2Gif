@@ -14,7 +14,7 @@
 - **体积估算**：两阶段估算；分析阶段在实际输出分辨率上抽取连续帧，统计索引色熵、相邻像素相等比例等特征，按同一调色板/抖动推断 LZW 码率，只输出区间，不试编码。批量合计只在全部就绪后显示。
 - **正式转换**：纯 Kotlin GIF89a 编码器（LZW、全局调色板、NETSCAPE 循环扩展、逐帧延迟误差补偿），输出到 `Pictures/Video2Gif`（Android 10+ 通过 MediaStore pending 发布；旧版保存到应用图片目录并支持分享）。
 - **批次**：逐项覆盖、统一参数、单独设置标记、错误项阻止整批开始、串行前台服务、通知进度、取消当前/全部、失败项保留原因并重试。
-- **持久化与恢复**：DataStore 保存草稿与设置，SharedPreferences 保存任务快照；进程中断后未完成项标记为“已中断”，已完成文件保留。
+- **设置与任务恢复**：DataStore 保存设置，SharedPreferences 保存转换任务快照；进程中断后未完成项标记为“已中断”，已完成文件保留。首页始终选择新视频，不保存或恢复上次编辑。
 - **主题与适配**：跟随系统/浅色/深色；Android 12+ 可选的壁纸配色；平板或宽窗口切为左侧预览、右侧参数；手机横屏仍可滚动使用；触控目标、数值输入与主要 TalkBack 描述已加入。
 
 ## 截图
@@ -45,7 +45,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 app/src/main/java/com/example/video2gif/
 ├── domain/       参数、批次、输出规格、GIF 计时、任务状态
 ├── media/        解码、Wu 量化、抖动、LZW/GIF 编码、体积估算、发布
-├── data/         DataStore 设置/草稿、任务快照 JSON
+├── data/         DataStore 设置、任务快照 JSON
 ├── service/      串行转换引擎、前台服务、通知
 ├── ui/           Compose 页面、组件、ViewModel、主题
 └── Video2GifApp.kt
