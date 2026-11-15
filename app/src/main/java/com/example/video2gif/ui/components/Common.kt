@@ -209,6 +209,8 @@ fun IconGlassButton(
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
+    val extended = AppTheme.extended
+    val dark = AppTheme.isDark
     Box(
         modifier = modifier
             .size(48.dp)
@@ -226,8 +228,17 @@ fun IconGlassButton(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(AppTheme.extended.glassFill)
-                .border(1.dp, AppTheme.extended.glassBorder, CircleShape),
+                .background(extended.glassFill)
+                .border(
+                    1.dp,
+                    Brush.linearGradient(
+                        listOf(
+                            if (dark) extended.glassBorder else extended.glassHighlight,
+                            extended.glassBorder,
+                        ),
+                    ),
+                    CircleShape,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -243,38 +254,56 @@ fun IconGlassButton(
 /**
  * 玻璃面板：半透明底色 + 顶部高光 + 1dp 边缘 + 内侧薄荷染色。
  * [ambient] 打开时在面板后方加一层柔光，用于主卡片；普通分组不开。
+ * [fillColor] 可为复杂背景上的主操作提供更凝实的底色，保留表面的反光与染色。
  */
 @Composable
 fun GlassPanel(
     modifier: Modifier = Modifier,
     shape: Shape = PanelShape.panel,
     ambient: Boolean = false,
+    fillColor: Color = AppTheme.extended.glassFill,
     content: @Composable () -> Unit,
 ) {
     val extended = AppTheme.extended
+    val dark = AppTheme.isDark
     Box(modifier) {
         if (ambient) {
             HaloGlow(
                 modifier = Modifier
                     .matchParentSize()
                     .padding(horizontal = 12.dp, vertical = 18.dp),
-                strength = 0.24f,
+                strength = if (dark) 0.24f else 0.10f,
             )
         }
-        Box(Modifier.matchParentSize().clip(shape).background(extended.glassFill)) {
+        Box(Modifier.matchParentSize().clip(shape).background(fillColor)) {
             if (ambient) {
-                // 缓存斜向柔光：只在主卡片表现磨砂片的厚度，正文区域保持安静。
+                // 浅色先铺宽幅青色折光，再叠斜向白色反射，让高光有可见的明暗落差。
                 Box(Modifier.matchParentSize().drawWithCache {
                     val sheen = Brush.linearGradient(
                         0f to Color.Transparent,
-                        0.24f to extended.auroraPale.copy(alpha = 0.10f),
-                        0.38f to Color.Transparent,
+                        0.24f to if (dark) extended.auroraPale.copy(alpha = 0.10f)
+                            else extended.glassHighlight.copy(alpha = 0.60f),
+                        0.38f to if (dark) Color.Transparent
+                            else extended.glassHighlight.copy(alpha = 0.18f),
+                        0.54f to if (dark) extended.auroraCore.copy(alpha = 0.032f) else Color.Transparent,
                         0.78f to extended.auroraCore.copy(alpha = 0.08f),
                         1f to Color.Transparent,
                         start = Offset.Zero,
                         end = Offset(size.width, size.height * 0.65f),
                     )
-                    onDrawBehind { drawRect(sheen) }
+                    val refraction = Brush.radialGradient(
+                        colors = listOf(
+                            extended.auroraCore.copy(alpha = 0.19f),
+                            extended.auroraPale.copy(alpha = 0.08f),
+                            Color.Transparent,
+                        ),
+                        center = Offset(size.width * 1.05f, size.height * 0.72f),
+                        radius = size.height * 0.85f,
+                    )
+                    onDrawBehind {
+                        if (!dark) drawRect(refraction)
+                        drawRect(sheen)
+                    }
                 })
             }
             Box(
@@ -284,8 +313,8 @@ fun GlassPanel(
                         Brush.verticalGradient(
                             0f to extended.glassTint,
                             0.42f to Color.Transparent,
-                            0.68f to extended.auroraCore.copy(alpha = 0.05f),
-                            1f to extended.auroraCore.copy(alpha = 0.16f),
+                            0.68f to extended.auroraCore.copy(alpha = if (dark) 0.05f else 0.02f),
+                            1f to extended.auroraCore.copy(alpha = if (dark) 0.16f else if (ambient) 0.13f else 0.07f),
                         ),
                     ),
             )
@@ -294,26 +323,46 @@ fun GlassPanel(
                     .matchParentSize()
                     .background(
                         Brush.verticalGradient(
-                            0f to extended.glassHighlight.copy(alpha = 0.10f),
+                            0f to extended.glassHighlight.copy(alpha = if (dark) 0.10f else 0.22f),
                             0.40f to Color.Transparent,
                         ),
                     ),
             )
-            // 内侧 1dp 边缘：用渐变描边代替纯色描边，顶部更亮，底部隐去。
+            // 浅色从白色反光过渡到薄墨色底边；深色保持原有的渐隐亮边。
             Box(
                 Modifier
                     .matchParentSize()
                     .border(
                         width = 1.dp,
                         brush = Brush.verticalGradient(
-                            listOf(
+                            if (dark) listOf(
                                 extended.glassBorder,
                                 extended.glassBorder.copy(alpha = extended.glassBorder.alpha * 0.45f),
+                            ) else listOf(
+                                extended.glassHighlight,
+                                extended.glassBorder.copy(alpha = extended.glassBorder.alpha * 0.35f),
+                                extended.glassBorder,
                             ),
                         ),
                         shape = shape,
                     ),
             )
+            if (ambient && !dark) {
+                // 内侧亮边与外侧暗边错开，形成薄玻璃切面的厚度，不添加投影。
+                Box(
+                    Modifier.matchParentSize().padding(1.5.dp).border(
+                        width = 1.dp,
+                        brush = Brush.linearGradient(
+                            listOf(
+                                extended.glassHighlight.copy(alpha = 0.85f),
+                                Color.Transparent,
+                                extended.glassHighlight.copy(alpha = 0.55f),
+                            ),
+                        ),
+                        shape = shape,
+                    ),
+                )
+            }
             // 顶边一道 1dp 高光，模拟玻璃边缘的折射。
             Box(
                 Modifier
@@ -324,7 +373,7 @@ fun GlassPanel(
                         Brush.horizontalGradient(
                             listOf(
                                 Color.Transparent,
-                                extended.glassHighlight.copy(alpha = 0.55f),
+                                extended.glassHighlight.copy(alpha = if (dark) 0.55f else 0.85f),
                                 Color.Transparent,
                             ),
                         ),

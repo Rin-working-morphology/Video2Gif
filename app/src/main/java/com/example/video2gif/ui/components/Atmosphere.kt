@@ -115,7 +115,7 @@ fun AuroraBackdrop(
     }
 }
 
-/** 内容页只在外沿保留星环与色片，让上下水彩自然延伸到页面留白。 */
+/** 内容页用宽弧暗纹呼应上下星环，避免竖条被误认为滚动条。 */
 @Composable
 private fun EdgeOrnaments(modifier: Modifier, intensity: Float) {
     val colors = AppTheme.extended
@@ -141,10 +141,29 @@ private fun EdgeOrnaments(modifier: Modifier, intensity: Float) {
                 style = Stroke(0.8.dp.toPx()),
             )
         }
-        filmBar(w * 0.025f, h * 0.26f, 5.dp.toPx(), h * 0.12f, colors.auroraCore, 0.32f * intensity)
-        filmBar(w * 0.955f, h * 0.64f, 8.dp.toPx(), h * 0.13f, colors.auroraPale, 0.40f * intensity)
-        drawLine(ink, Offset(w * 0.97f, h * 0.48f), Offset(w * 0.97f, h * 0.60f), 1.dp.toPx())
-        drawLine(ink, Offset(w * 0.045f, h * 0.76f), Offset(w * 0.045f, h * 0.86f), 1.dp.toPx())
+        // 弧线从边缘舒展，在进入内容区前淡出，不形成贴边的竖向轨道。
+        repeat(2) { index ->
+            val inset = index * 8.dp.toPx()
+            val leftArc = Path().apply {
+                moveTo(-w * 0.08f, h * 0.30f + inset)
+                cubicTo(w * 0.02f, h * 0.36f + inset, w * 0.22f, h * 0.38f + inset, w * 0.43f, h * 0.34f + inset)
+            }
+            val rightArc = Path().apply {
+                moveTo(w * 0.58f, h * 0.68f + inset)
+                cubicTo(w * 0.80f, h * 0.71f + inset, w * 0.98f, h * 0.66f + inset, w * 1.08f, h * 0.60f + inset)
+            }
+            val arcInk = ink.copy(alpha = ink.alpha * (0.55f - index * 0.15f))
+            drawPath(
+                leftArc,
+                Brush.horizontalGradient(listOf(arcInk, Color.Transparent), endX = w * 0.43f),
+                style = Stroke(0.8.dp.toPx()),
+            )
+            drawPath(
+                rightArc,
+                Brush.horizontalGradient(listOf(Color.Transparent, arcInk), startX = w * 0.58f, endX = w),
+                style = Stroke(0.8.dp.toPx()),
+            )
+        }
         translate(w * 0.085f, h * 0.13f) {
             drawPath(sparklePath(Size(17.dp.toPx(), 17.dp.toPx())), colors.sparkle.copy(alpha = 0.42f * intensity))
         }

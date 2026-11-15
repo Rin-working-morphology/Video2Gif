@@ -210,6 +210,8 @@ private fun EmptyHeroCard(
                 contentDescription = if (importing) "正在读取视频信息" else "选择视频，先预览效果，确认后再转换"
             },
         ambient = true,
+        // 浅色保留少量透光，配合表面折光表现厚度；深色保持凝实的石墨底。
+        fillColor = extended.glassFill.copy(alpha = if (AppTheme.isDark) 0.97f else 0.88f),
     ) {
         Column(
             Modifier
