@@ -91,78 +91,6 @@ object VideoProbe {
     }
 }
 
-/**
- * 顺序解码器。每次只向前取一个目标时间戳，不预存整段帧序列；
- * 屏幕预览、调色板抽样与正式编码共用这个解码入口。
- */
-class FrameDecoder(private val context: Context, private val uri: Uri) : AutoCloseable {
-    private val retriever = MediaMetadataRetriever()
-    private val lock = Any()
-    private var opened = false
-    private var closed = false
-
-    private fun ensureOpen() {
-        if (!opened) {
-            retriever.setDataSource(context, uri)
-            opened = true
-        }
-    }
-
-    /**
-     * 解码指定源时间的一帧，并按源方向元数据转正。
-     * [requestLongSide] 是显示坐标下的期望长边，用于限制解码像素预算。
-     */
-    fun decode(timeMs: Long, source: SourceVideo, requestLongSide: Int): Bitmap? = synchronized(lock) {
-        if (closed) return null
-        try {
-            ensureOpen()
-            // 编码帧尺寸与显示尺寸在 90°/270° 时互换，请求缩放必须按编码尺寸计算。
-            val encodedWidth = if (source.rotationDegrees % 180 == 90) source.displayHeight else source.displayWidth
-            val encodedHeight = if (source.rotationDegrees % 180 == 90) source.displayWidth else source.displayHeight
-            val encodedLong = max(encodedWidth, encodedHeight)
-            val scale = min(1f, requestLongSide.toFloat() / encodedLong.coerceAtLeast(1))
-            val requestW = (encodedWidth * scale).roundToInt().coerceAtLeast(2)
-            val requestH = (encodedHeight * scale).roundToInt().coerceAtLeast(2)
-            val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                retriever.getScaledFrameAtTime(
-                    timeMs * 1000L,
-                    MediaMetadataRetriever.OPTION_CLOSEST,
-                    requestW,
-                    requestH,
-                )
-            } else {
-                retriever.getFrameAtTime(timeMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
-            } ?: return null
-            var oriented = ImageOps.applySourceRotation(
-                raw,
-                source.rotationDegrees,
-                encodedWidth,
-                encodedHeight,
-            )
-            val actualLong = max(oriented.width, oriented.height)
-            if (actualLong > requestLongSide) {
-                val scale = requestLongSide.toFloat() / actualLong
-                oriented = ImageOps.scale(
-                    oriented,
-                    (oriented.width * scale).roundToInt().coerceAtLeast(2),
-                    (oriented.height * scale).roundToInt().coerceAtLeast(2),
-                )
-            }
-            oriented
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    override fun close() {
-        synchronized(lock) {
-            if (closed) return
-            closed = true
-            if (opened) runCatching { retriever.release() }
-        }
-    }
-}
-
 object ImageOps {
     /** 部分 Android 解码器会先应用旋转元数据，按帧宽高避免重复旋转。 */
     fun applySourceRotation(bitmap: Bitmap, degrees: Int, encodedWidth: Int, encodedHeight: Int): Bitmap {
@@ -293,6 +221,8 @@ object SizeEstimator {
         averageChangedRatio: Double,
         sampledWindows: Int,
         totalWindows: Int,
+        averageRectangleRatio: Double = 1.0,
+        repeatedFrameRatio: Double = 0.0,
     ): SizeEstimate {
         // LZW 的实际码率同时取决于符号分布（熵）与空间重复。
         // 系数由有序抖动输出与实际 LZW 结果对照得到：相邻相等比例越高，码率越低。
@@ -301,14 +231,17 @@ object SizeEstimator {
         val bitsPerPixel = (averageEntropyBits * compression).coerceIn(0.12, 7.8)
         val frameBytes = spec.pixelCount * bitsPerPixel / 8.0 + 20.0
         val tableBytes = colorCount * 3.0 + 96.0
-        val center = (frameBytes * spec.frameCount + tableBytes).toLong().coerceAtLeast(2048)
+        val transitions = (spec.frameCount - 1).coerceAtLeast(0)
+        val activeRatio = 1.0 - repeatedFrameRatio.coerceIn(0.0, 1.0)
+        val deltaBytes = spec.pixelCount * bitsPerPixel / 8.0 * averageRectangleRatio.coerceIn(0.0, 1.0) + 20 * activeRatio
+        val center = (frameBytes + deltaBytes * transitions + tableBytes).toLong().coerceAtLeast(128)
         val coverage = (sampledWindows.toFloat() / totalWindows.coerceAtLeast(1)).coerceIn(0f, 1f)
         // 覆盖越少、变化越剧烈，区间越宽。
         val spread = 0.16 + 0.08 * (1.0 - coverage) + 0.10 * averageChangedRatio.coerceIn(0.0, 1.0)
         return SizeEstimate(
             centerBytes = center,
-            lowBytes = (center * (1.0 - spread)).toLong().coerceAtLeast(1024),
-            highBytes = (center * (1.0 + spread * 1.5)).toLong().coerceAtLeast(2048),
+            lowBytes = (center * (1.0 - spread)).toLong().coerceAtLeast(64),
+            highBytes = (center * (1.0 + spread * 1.5)).toLong().coerceAtLeast(128),
             analyzed = true,
             coverage = coverage,
         )
@@ -324,7 +257,7 @@ data class AnalysisResult(
 object PaletteBuilder {
     private const val SAMPLE_FRAMES = 8
 
-    fun build(
+    suspend fun build(
         decoder: FrameDecoder,
         source: SourceVideo,
         recipe: ConversionRecipe,
@@ -362,7 +295,7 @@ object PaletteBuilder {
     }
 
     /** 分析：统计抽样帧的索引色熵与帧间变化，生成体积区间。不写入任何 GIF 数据。 */
-    fun analyze(
+    suspend fun analyze(
         decoder: FrameDecoder,
         source: SourceVideo,
         recipe: ConversionRecipe,
@@ -382,11 +315,15 @@ object PaletteBuilder {
         var adjacentSum = 0.0
         var sampledFrames = 0
         var sampledWindows = 0
-        var previousIndices: ByteArray? = null
+        var rectangleSum = 0.0
+        var repeatedPairs = 0
+        var sampledPairs = 0
         for (w in 0 until windows) {
             val windowFraction = (w + 0.5) / windows
             val centerFrame = (totalFrames * windowFraction).roundToInt().coerceIn(0, totalFrames - 1)
             var windowSampled = false
+            var previousIndices: ByteArray? = null
+            var previousFrameIndex = -1
             for (k in 0 until framesPerWindow) {
                 val frameIndex = (centerFrame + k).coerceAtMost(totalFrames - 1)
                 val timeMs = recipe.sourceTimeMsForFrame(source, frameIndex)
@@ -399,9 +336,16 @@ object PaletteBuilder {
                 entropySum += entropyOf(indices, palette.size)
                 adjacentSum += adjacentEqualRatio(indices, sampleW, sampleH)
                 previousIndices?.let { prev ->
-                    changedSum += changedRatio(prev, indices)
+                    if (frameIndex != previousFrameIndex) {
+                        changedSum += changedRatio(prev, indices)
+                        val rect = changedBounds(prev, indices, sampleW, sampleH)
+                        if (rect == null) repeatedPairs++
+                        else rectangleSum += rect.width.toDouble() * rect.height / (sampleW * sampleH)
+                        sampledPairs++
+                    }
                 }
                 previousIndices = indices
+                previousFrameIndex = frameIndex
                 sampledFrames++
                 windowSampled = true
             }
@@ -412,7 +356,7 @@ object PaletteBuilder {
         }
         val averageEntropy = entropySum / sampledFrames
         val averageAdjacent = adjacentSum / sampledFrames
-        val averageChanged = (changedSum / (sampledFrames - 1).coerceAtLeast(1)).coerceIn(0.0, 1.0)
+        val averageChanged = (changedSum / sampledPairs.coerceAtLeast(1)).coerceIn(0.0, 1.0)
         return AnalysisResult(
             palette = palette,
             estimate = SizeEstimator.fromSamples(
@@ -423,6 +367,8 @@ object PaletteBuilder {
                 averageChangedRatio = averageChanged,
                 sampledWindows = sampledWindows,
                 totalWindows = windows,
+                averageRectangleRatio = if (sampledPairs > 0) rectangleSum / sampledPairs else 1.0,
+                repeatedFrameRatio = if (sampledPairs > 0) repeatedPairs.toDouble() / sampledPairs else 0.0,
             ),
         )
     }
@@ -478,7 +424,7 @@ data class PreviewFrame(
 object PreviewRenderer {
     const val PREVIEW_MAX_LONG_SIDE = 480
 
-    fun render(
+    suspend fun render(
         decoder: FrameDecoder,
         source: SourceVideo,
         recipe: ConversionRecipe,

@@ -9,13 +9,14 @@ class Video2GifApp : Application() {
     override fun onCreate() {
         super.onCreate()
         ConversionNotifications.ensureChannel(this)
-        // 恢复最近任务快照；未完成项在解码器中标记为 Interrupted。
+        // 对账发布检查点，未完成项标记为 Interrupted。
         ConversionEngine.reconcile(this)
         cleanupOrphanTemps()
     }
 
     /** 清理没有被任何任务引用的私有临时 GIF，避免进程中断后残留。 */
     private fun cleanupOrphanTemps() {
+        if (ConversionEngine.state.value?.batchId in setOf("unreadable", "recovery")) return
         val referenced = ConversionEngine.state.value?.items
             ?.mapNotNull { it.tempPath }
             ?.toHashSet()

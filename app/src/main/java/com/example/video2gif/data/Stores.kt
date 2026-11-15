@@ -49,13 +49,26 @@ class RunStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("conversion_run", Context.MODE_PRIVATE)
 
     fun save(run: RunState) {
-        prefs.edit().putString(KEY_RUN, JsonCodec.runToJson(run)).apply()
+        if (!prefs.edit().putString(KEY_RUN, JsonCodec.runToJson(run)).commit()) {
+            throw IOException("无法保存任务状态，请检查存储空间")
+        }
     }
 
-    fun load(): RunState? = JsonCodec.runFromJson(prefs.getString(KEY_RUN, null))
+    fun load(): RunState? {
+        val raw = prefs.getString(KEY_RUN, null)
+        return try {
+            JsonCodec.runFromJson(raw)
+        } catch (e: IOException) {
+            // 保留损坏或高版本原文，不能在下一次转换时把唯一恢复资料覆盖掉。
+            if (!prefs.edit().putString("unreadable_run_${System.currentTimeMillis()}", raw)
+                    .remove(KEY_RUN).commit()) throw e
+            RunState("unreadable", System.currentTimeMillis(), emptyList(),
+                isRunning = false, stopReason = e.message)
+        }
+    }
 
     fun clear() {
-        prefs.edit().remove(KEY_RUN).apply()
+        if (!prefs.edit().remove(KEY_RUN).commit()) throw IOException("无法清除任务状态")
     }
 
     private companion object {

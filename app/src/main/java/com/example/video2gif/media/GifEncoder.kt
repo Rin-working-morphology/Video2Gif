@@ -3,8 +3,8 @@ package com.example.video2gif.media
 import java.io.OutputStream
 
 /**
- * 最小但完整的 GIF89a 写入器：全局调色板、NETSCAPE 循环扩展、全帧、LZW。
- * 无透明、无局部调色板、无差分矩形；首版以正确性为基线。
+ * GIF89a 写入器：全局调色板、重复帧合并、不透明差分矩形、LZW。
+ * disposal=1 保留画布；每次只持有上一张已写画布与一张待写帧。
  */
 class GifEncoder(
     private val out: OutputStream,
@@ -19,6 +19,10 @@ class GifEncoder(
     private val minCodeSize: Int
     private val table: IntArray
     private var frameWritten = false
+    private var previous: ByteArray? = null
+    private var pending: ByteArray? = null
+    private var pendingDelay = 0L
+    private var finished = false
 
     init {
         require(width in 1..65535 && height in 1..65535)
@@ -63,6 +67,39 @@ class GifEncoder(
 
     fun writeFrame(indices: ByteArray, delayCentis: Int) {
         require(indices.size == width * height) { "frame size mismatch" }
+        check(!finished)
+        require(delayCentis in 1..65535)
+        if (pending?.contentEquals(indices) == true) {
+            pendingDelay += delayCentis
+        } else {
+            flushPending()
+            // 调用方可能复用像素缓冲，编码器必须拥有待写帧。
+            pending = indices.copyOf()
+            pendingDelay = delayCentis.toLong()
+        }
+    }
+
+    private fun flushPending() {
+        val pixels = pending ?: return
+        val rect = changedBounds(previous, pixels, width, height)
+            ?: PixelRect(0, 0, 1, 1)
+        val region = ByteArray(rect.width * rect.height)
+        for (y in 0 until rect.height) {
+            pixels.copyInto(region, y * rect.width,
+                (rect.top + y) * width + rect.left,
+                (rect.top + y) * width + rect.left + rect.width)
+        }
+        // GIF 延迟只有 16 位；长静止段拆成多个保留画布的帧，不能截断时长。
+        while (pendingDelay > 0) {
+            val delay = minOf(pendingDelay, 65535).toInt()
+            writeRegion(region, rect, delay)
+            pendingDelay -= delay
+        }
+        previous = pixels
+        pending = null
+    }
+
+    private fun writeRegion(indices: ByteArray, rect: PixelRect, delayCentis: Int) {
         frameWritten = true
         // Graphic Control Extension：disposal = 保留画面
         out.write(0x21)
@@ -74,10 +111,10 @@ class GifEncoder(
         out.write(0)
         // Image Descriptor
         out.write(0x2C)
-        writeShort(0)
-        writeShort(0)
-        writeShort(width)
-        writeShort(height)
+        writeShort(rect.left)
+        writeShort(rect.top)
+        writeShort(rect.width)
+        writeShort(rect.height)
         out.write(0)
         out.write(minCodeSize)
         val writer = BlockWriter(out)
@@ -87,9 +124,13 @@ class GifEncoder(
     }
 
     fun finish() {
+        check(!finished)
+        flushPending()
         check(frameWritten) { "GIF 至少需要一帧" }
         out.write(0x3B)
         out.flush()
+        finished = true
+        previous = null
     }
 
     private fun writeShort(value: Int) {

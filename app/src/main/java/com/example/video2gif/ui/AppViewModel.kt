@@ -32,6 +32,7 @@ import com.example.video2gif.domain.SharedParam
 import com.example.video2gif.domain.SourceVideo
 import com.example.video2gif.domain.ThemeMode
 import com.example.video2gif.domain.VideoItemDraft
+import com.example.video2gif.domain.sourceTimeMsForFrame
 import com.example.video2gif.domain.outputSpec
 import com.example.video2gif.media.ColorPalette
 import com.example.video2gif.media.FrameDecoder
@@ -633,7 +634,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     originWall = SystemClock.elapsedRealtime()
                     originSource = start
                 }
-                val sourceTime = if (time >= end - 1) end - 1 else time
+                val frameIndex = (((if (time >= end - 1) start else time) - start) /
+                    item.recipe.speed * item.recipe.fps / 1000.0).toInt().coerceIn(0, spec.frameCount - 1)
+                val sourceTime = item.recipe.sourceTimeMsForFrame(source, frameIndex)
                 val frame = try {
                     PreviewRenderer.render(decoder, source, item.recipe, spec, sourceTime, palette)
                 } catch (_: Exception) {

@@ -15,6 +15,7 @@ import org.json.JSONObject
 
 /** 转换任务快照的 JSON 编码。 */
 object JsonCodec {
+    const val RUN_SCHEMA_VERSION = 2
 
     fun sourceToJson(source: SourceVideo): JSONObject = JSONObject().apply {
         put("displayWidth", source.displayWidth)
@@ -109,6 +110,7 @@ object JsonCodec {
 
     fun runToJson(run: RunState): String {
         val root = JSONObject()
+        root.put("schemaVersion", RUN_SCHEMA_VERSION)
         root.put("batchId", run.batchId)
         root.put("startedAt", run.startedAt)
         root.put("currentIndex", run.currentIndex)
@@ -131,6 +133,8 @@ object JsonCodec {
                 put("outputSize", item.outputSizeBytes)
                 item.locationLabel?.let { put("location", it) }
                 put("publishOnly", item.publishOnly)
+                item.pendingUri?.let { put("pendingUri", it) }
+                put("publishReady", item.publishReady)
             })
         }
         root.put("items", items)
@@ -139,17 +143,20 @@ object JsonCodec {
 
     fun runFromJson(raw: String?): RunState? {
         if (raw.isNullOrBlank()) return null
+        val root = try { JSONObject(raw) } catch (e: Exception) {
+            throw java.io.IOException("任务记录损坏，已保留原始记录", e)
+        }
+        val version = root.optInt("schemaVersion", 1)
+        if (version !in 1..RUN_SCHEMA_VERSION) throw java.io.IOException("不支持的任务版本：$version")
         return try {
-            val root = JSONObject(raw)
             val array = root.optJSONArray("items") ?: JSONArray()
-            val interrupted = root.optBoolean("isRunning", false)
             val parsed = ArrayList<RunItem>(array.length())
             for (i in 0 until array.length()) {
                 val item = array.getJSONObject(i)
                 var status = runCatching { JobStatus.valueOf(item.getString("status")) }
                     .getOrDefault(JobStatus.Interrupted)
-                if (interrupted && (status == JobStatus.Queued || status == JobStatus.Preparing ||
-                        status == JobStatus.Encoding || status == JobStatus.Publishing)
+                if (status == JobStatus.Queued || status == JobStatus.Preparing ||
+                        status == JobStatus.Encoding || status == JobStatus.Publishing
                 ) {
                     status = JobStatus.Interrupted
                 }
@@ -168,6 +175,8 @@ object JsonCodec {
                     outputSizeBytes = item.optLong("outputSize", 0L),
                     locationLabel = item.optString("location").takeIf { it.isNotBlank() && it != "null" },
                     publishOnly = item.optBoolean("publishOnly", false),
+                    pendingUri = item.optString("pendingUri").takeIf { it.isNotBlank() && it != "null" },
+                    publishReady = item.optBoolean("publishReady", false),
                 )
             }
             if (parsed.isEmpty()) return null
@@ -179,8 +188,8 @@ object JsonCodec {
                 isRunning = false,
                 stopReason = root.optString("stopReason").takeIf { it.isNotBlank() && it != "null" },
             )
-        } catch (_: Exception) {
-            null
+        } catch (e: Exception) {
+            throw java.io.IOException("无法读取任务记录，已保留原始记录", e)
         }
     }
 }

@@ -17,6 +17,9 @@ data class RunItem(
     val outputSizeBytes: Long = 0L,
     val locationLabel: String? = null,
     val publishOnly: Boolean = false,
+    /** 发布前先持久化目标；完整复制后才允许公开。 */
+    val pendingUri: String? = null,
+    val publishReady: Boolean = false,
 )
 
 data class RunState(
