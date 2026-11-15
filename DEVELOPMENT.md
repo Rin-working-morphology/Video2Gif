@@ -191,3 +191,27 @@ JAVA_HOME=/opt/android-studio/jbr ./gradlew \
 `adb devices` 当前无连接设备；以下没有执行：MediaCodec 真实像素与颜色、预览/导出一致性、设备内存峰值、MediaStore 故障测试、真实 FGS 超时和强制进程退出。设备测试源码已加入，测试 APK 已编译，不把编译成功记成设备测试通过。
 
 轻量自动化与系统级注入步骤见 [docs/DEVICE_VALIDATION.md](docs/DEVICE_VALIDATION.md)。连接可用设备后先运行小型回归，再由用户决定真实录像与系统级故障验证范围。第 4、5 项未启动。
+
+## 8. 发布与自动更新（2026-11-15）
+
+### 8.1 流水线
+
+`.github/workflows/release.yml` 在推送 `v*` 标签（或手动触发）时：
+
+1. 解析版本：`versionName` 取标签去掉 `v`；`versionCode` 取当前 UTC 分钟数（单调递增、远离 int 上限，也不依赖会重置的 run number），通过 `-PversionName/-PversionCode` 注入 Gradle。
+2. 从仓库 Secrets 还原 keystore（`SIGNING_KEYSTORE_BASE64`、`SIGNING_STORE_PASSWORD`、`SIGNING_KEY_ALIAS`、`SIGNING_KEY_PASSWORD`），`assembleRelease` 产出签名 APK。
+3. 用 `apksigner` 校验签名，改名为 `Video2Gif-<版本>.apk`，计算 SHA-256，并用 Python 生成 `latest.json`。
+4. 创建 Release，上传 APK 与 `latest.json`，标记为 latest。
+
+签名 keystore 只存在于维护者本机的 `~/.local/share/video2gif/` 与 GitHub Secrets，不进入仓库；`.gitignore` 已排除 `*.jks`、`*.keystore` 与根目录的 `latest.json`。
+
+### 8.2 latest.json 与客户端检查
+
+`latest.json` 字段：`schemaVersion`、`versionCode`、`versionName`、`tag`、`apkName`、`apkUrl`、`apkSizeBytes`、`sha256`、`releaseUrl`、`publishedAt`、`notes`。
+
+设置页“关于”的更新入口调用 `UpdateChecker.fetch()` GET `https://github.com/Rin-working-morphology/Video2Gif/releases/latest/download/latest.json`，8 秒超时、响应上限 64 KiB。`UpdateManifest` 要求 `versionCode > 0` 且版本名非空，并只接受本仓库域名下的 `releaseUrl` / `apkUrl`，避免被篡改的 JSON 拉起任意链接；`notes` 截断到 600 字符。仅当远端 `versionCode` 严格大于本机时才提示更新，用户确认后用系统浏览器打开 Release 页面，应用不申请“安装未知应用”权限。网络错误映射为“网络不可用 / 连接超时 / 服务返回 xxx”等可读文案，重复点击在请求进行中会被忽略。
+
+### 8.3 验证
+
+- `UpdateManifestTest` 覆盖合法清单、缺 `versionCode`、非 JSON、伪造链接、无效 SHA、版本比较与 notes 截断。
+- 正式包与升级路径以 GitHub Actions 的实际发布结果为准；本地只验证构建、签名配置与单元测试，不代跑托管 runner。

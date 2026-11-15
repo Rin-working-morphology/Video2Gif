@@ -1,6 +1,9 @@
 package com.example.video2gif.ui
 
 import android.app.Application
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -44,6 +47,9 @@ import com.example.video2gif.media.SizeEstimate
 import com.example.video2gif.media.SizeEstimator
 import com.example.video2gif.media.VideoProbe
 import com.example.video2gif.service.ConversionEngine
+import com.example.video2gif.update.UpdateChecker
+import com.example.video2gif.update.UpdateInfo
+import com.example.video2gif.update.UpdateStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -133,6 +139,62 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setDynamicColor(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setDynamicColor(enabled) }
+    }
+
+    // ----- 更新检查 -----
+
+    var updateStatus by mutableStateOf<UpdateStatus>(UpdateStatus.Idle)
+        private set
+
+    /** 发现新版本时弹一次对话框；用户关闭后不重复打扰，除非再次手动检查。 */
+    var updateDialogVisible by mutableStateOf(false)
+        private set
+
+    private var updateJob: Job? = null
+
+    fun checkForUpdates() {
+        if (updateJob?.isActive == true) return
+        updateStatus = UpdateStatus.Checking
+        updateJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { UpdateChecker.fetch() }.fold(
+                    onSuccess = { info ->
+                        if (info.isNewerThan(UpdateChecker.currentVersionCode(app))) {
+                            UpdateStatus.Available(info)
+                        } else {
+                            UpdateStatus.UpToDate
+                        }
+                    },
+                    onFailure = { UpdateStatus.Failed(UpdateChecker.userFacingError(it)) },
+                )
+            }
+            updateStatus = result
+            when (result) {
+                is UpdateStatus.Available -> updateDialogVisible = true
+                UpdateStatus.UpToDate -> notice = "已是最新版本"
+                is UpdateStatus.Failed -> notice = result.reason
+                else -> Unit
+            }
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        updateDialogVisible = false
+    }
+
+    /** 下载走系统浏览器与 GitHub Release 页面，应用本身不申请安装未知应用权限。 */
+    fun openUpdatePage(info: UpdateInfo) {
+        updateDialogVisible = false
+        val opened = runCatching {
+            app.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(info.releaseUrl))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.isSuccess
+        if (opened) return
+        val clipboard = app.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        clipboard?.setPrimaryClip(ClipData.newPlainText("Video2Gif 发布页", info.releaseUrl))
+        notice = "没有可打开网页的应用，下载链接已复制"
     }
 
     // ----- 导航 -----

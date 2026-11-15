@@ -1,7 +1,7 @@
 package com.example.video2gif.ui.screens
 
 import android.os.Build
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,23 +15,29 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.PhotoLibrary
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SystemUpdateAlt
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,10 +47,11 @@ import com.example.video2gif.ui.components.AppTopBar
 import com.example.video2gif.ui.components.AuroraBackdrop
 import com.example.video2gif.ui.components.GlassPanel
 import com.example.video2gif.ui.components.Hairline
-import com.example.video2gif.ui.theme.PanelShape
 import com.example.video2gif.ui.components.SegmentOption
 import com.example.video2gif.ui.components.SegmentedOptions
-import com.example.video2gif.ui.theme.AppTheme
+import com.example.video2gif.ui.theme.PanelShape
+import com.example.video2gif.update.UpdateInfo
+import com.example.video2gif.update.UpdateStatus
 
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
@@ -53,7 +60,6 @@ fun SettingsScreen(vm: AppViewModel) {
     val version = runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName
     }.getOrNull() ?: "1.0"
-    val extended = AppTheme.extended
 
     Box(Modifier.fillMaxSize()) {
     AuroraBackdrop(Modifier.fillMaxSize(), intensity = 0.85f)
@@ -165,12 +171,149 @@ fun SettingsScreen(vm: AppViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Hairline(Modifier.padding(start = 16.dp))
+                UpdateRow(vm, currentVersion = version)
             }
 
             Spacer(Modifier.height(24.dp))
         }
     }
+
+    val available = (vm.updateStatus as? UpdateStatus.Available)?.info
+    if (vm.updateDialogVisible && available != null) {
+        UpdateDialog(
+            info = available,
+            currentVersion = version,
+            onOpen = { vm.openUpdatePage(available) },
+            onDismiss = vm::dismissUpdateDialog,
+        )
     }
+    }
+}
+
+/** 关于栏里的更新入口：点击后查询 GitHub Release 的 latest.json。 */
+@Composable
+private fun UpdateRow(vm: AppViewModel, currentVersion: String) {
+    val status = vm.updateStatus
+    val checking = status == UpdateStatus.Checking
+    val available = (status as? UpdateStatus.Available)?.info
+    val upToDate = status == UpdateStatus.UpToDate
+    val failed = status as? UpdateStatus.Failed
+
+    val title = when {
+        checking -> "正在检查更新…"
+        available != null -> "发现新版本 ${available.versionName}"
+        upToDate -> "已是最新版本"
+        else -> "检查更新"
+    }
+    val supporting = when {
+        checking -> "正在读取 GitHub Release 上的版本信息"
+        available != null -> "当前版本 $currentVersion，点击查看下载方式"
+        upToDate -> "当前版本 $currentVersion，可再次检查"
+        failed != null -> "${failed.reason}，点此重试"
+        else -> "从 GitHub Release 查询是否有新版本"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(PanelShape.card)
+            .clickable(enabled = !checking, role = Role.Button, onClick = vm::checkForUpdates)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Rounded.SystemUpdateAlt,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+            )
+            Text(
+                supporting,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        when {
+            checking -> CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            available != null -> Icon(
+                Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            upToDate -> Icon(
+                Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            failed != null -> Icon(
+                Icons.Rounded.Refresh,
+                contentDescription = "重试",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            else -> Icon(
+                Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun UpdateDialog(
+    info: UpdateInfo,
+    currentVersion: String,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("发现新版本 ${info.versionName}") },
+        text = {
+            Column {
+                Text(
+                    "当前版本 $currentVersion，最新版本 ${info.versionName}。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (info.notes.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        info.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "下载会打开 GitHub Release 页面，请在那里取最新 APK。首次从调试版切换到正式版需要先卸载；正式版之间可直接覆盖安装。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onOpen) { Text("去下载") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("稍后") }
+        },
+    )
 }
 
 @Composable

@@ -4,6 +4,23 @@
 
 做都做了索性就做得好看一点，所以这是一个还算好看的视频转Gif应用。界面为 Jetpack Compose + Material 3。为什么用Kotlin因为我上次写Kotlin还是若干年前突然想复健一下（突然老气横秋的语气！）
 
+## 下载
+
+正式版从 [GitHub Releases](https://github.com/Rin-working-morphology/Video2Gif/releases/latest) 下载 `Video2Gif-<版本>.apk`。
+
+- 推送 `v*` 标签后由 GitHub Actions 自动构建签名 APK 并发 Release，同一次发布还会上传 `latest.json`。
+- 设置 → 关于 → 检查更新会读取 `releases/latest/download/latest.json`，比较 `versionCode` 后提示是否有新版本；确认后用浏览器打开 Release 页面下载。
+- 首次从本地调试版切换到正式版需要卸载重装（签名不同）；之后正式版之间可以直接覆盖升级。
+
+发版只需打标签：
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+工作流会构建签名 APK、生成 `latest.json` 并发布 Release。签名 keystore 保存在维护者本机的 `~/.local/share/video2gif/`，对应的仓库 Secrets 以 `SIGNING_` 开头；换机时必须沿用同一份 keystore，否则已安装的旧版无法覆盖升级。
+
 ## 已实现
 
 - **导入**：系统 Photo Picker，单批 1–10 个视频；读取真实时长、显示尺寸、方向与缩略图；Photo Picker 不可用时由系统文件选择器回退。
@@ -13,6 +30,7 @@
 - **正式转换**：纯 Kotlin GIF89a 编码器（LZW、全局调色板、NETSCAPE 循环扩展、逐帧延迟误差补偿、重复帧合并和差分矩形），输出到 `Pictures/Video2Gif`（Android 10+ 通过 MediaStore pending 发布；旧版保存到应用图片目录并支持分享）。
 - **批次**：逐项覆盖、统一参数、单独设置标记、错误项阻止整批开始、串行前台服务、通知进度、取消当前/全部、失败项保留原因并重试。
 - **设置与任务恢复**：DataStore 保存设置，SharedPreferences 同步保存带版本的转换任务与发布检查点；进程中断后未完成项标记为“已中断”，已完成文件保留。首页始终选择新视频，不保存或恢复上次编辑。
+- **更新检查**：设置页手动查询 GitHub Release 的 `latest.json`，只有远端 `versionCode` 更高时才提示，确认后打开 Release 页面下载最新 APK。
 - **主题与适配**：跟随系统/浅色/深色；Android 12+ 可选的壁纸配色；平板或宽窗口切为左侧预览、右侧参数；手机横屏仍可滚动使用；触控目标、数值输入与主要 TalkBack 描述已加入。
 
 ## 代码结构

@@ -3,6 +3,22 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// 版本号默认值供本地构建使用；发布流水线用 -PversionName/-PversionCode 覆盖。
+val injectedVersionName: String? = providers.gradleProperty("versionName").orNull
+val injectedVersionCode: Int? = providers.gradleProperty("versionCode").orNull?.toIntOrNull()
+
+// 发布签名只在四个环境变量齐全时启用；本地没有 keystore 时仍可构建未签名 APK。
+val signingKeystorePath: String? = System.getenv("SIGNING_KEYSTORE_PATH")
+val signingStorePassword: String? = System.getenv("SIGNING_STORE_PASSWORD")
+val signingKeyAlias: String? = System.getenv("SIGNING_KEY_ALIAS")
+val signingKeyPassword: String? = System.getenv("SIGNING_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    signingKeystorePath,
+    signingStorePassword,
+    signingKeyAlias,
+    signingKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.example.video2gif"
     compileSdk {
@@ -13,14 +29,29 @@ android {
         applicationId = "com.example.video2gif"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = injectedVersionCode ?: 1
+        versionName = injectedVersionName ?: "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(signingKeystorePath!!)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // 缺少 secrets 时保持未签名；CI 中始终保持签名，保证可覆盖升级。
+            signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else null
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")

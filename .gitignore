@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 发布签名与本地生成的文件
+*.jks
+*.keystore
+/latest.json
