@@ -54,7 +54,9 @@ android {
             signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else null
             optimization {
                 enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+                // 不要设置 packageScope：它开启 AGP 9 的渐进式裁剪（gradual shrinking）实验特性，
+                // 会让 R8 合并 Kotlin 标准库的包内私有类，运行时抛 IllegalAccessError。
+                // 保持默认的 "**"（完整 R8 优化）。
             }
         }
     }

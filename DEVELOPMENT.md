@@ -215,3 +215,25 @@ JAVA_HOME=/opt/android-studio/jbr ./gradlew \
 
 - `UpdateManifestTest` 覆盖合法清单、缺 `versionCode`、非 JSON、伪造链接、无效 SHA、版本比较与 notes 截断。
 - 正式包与升级路径以 GitHub Actions 的实际发布结果为准；本地只验证构建、签名配置与单元测试，不代跑托管 runner。
+
+### 8.4 正式包启动崩溃与 R8 渐进式裁剪（2026-11-15）
+
+`v1.0.0` / `v1.0.1` 的签名包在 API 37 模拟器与真机上启动即崩溃：
+
+```text
+java.lang.IllegalAccessError: Class kotlin.sequences.d extended by class qe1 is inaccessible
+    at ... androidx.compose.ui.text.font ...
+```
+
+根因是 `release.optimization.packageScope` 被设为非 `**` 的包集合。AGP 9.5 会因此启用默认开启的 `android.r8.gradual.support`（R8 渐进式裁剪实验特性），导致 Kotlin 标准库的包内私有类与其他类合并时违反访问权限；debug 包不经过 R8，所以本地一直没有暴露。
+
+处理：移除 `packageScope`，保留 `optimization { enable = true }`，回到默认 `**` 的完整 R8。修复后在 API 37 模拟器上验证：冷启动正常、设置页正常、检查更新能读取 `latest.json` 并打开对应 Release 页。以后调整 R8 范围时必须用正式包做启动验证，不能只看构建成功。
+
+### 8.5 本地构建的 JDK 说明
+
+`gradle/gradle-daemon-jvm.properties` 要求 daemon 使用 JDK 25。若本机没有 JDK 25，Gradle 会自动从 foojay 下载；网络慢时会长时间卡在下载。可以用 Android Studio 自带的 JDK 直接构建：
+
+```bash
+JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:assembleRelease \
+  -PversionName=1.0.2 -PversionCode=29912430
+```
