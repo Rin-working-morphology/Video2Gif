@@ -1,7 +1,6 @@
 package com.example.video2gif.update
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -83,13 +82,4 @@ object UpdateChecker {
             context.packageManager.getPackageInfo(context.packageName, 0)
         info.versionName
     }.getOrNull()?.takeIf { it.isNotBlank() } ?: "1.0"
-
-    /** 部分厂商 ROM 需要显式判断才能区分“没装浏览器”和“用户取消”。 */
-    fun canOpenUrl(context: Context, url: String): Boolean = runCatching {
-        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-        context.packageManager.queryIntentActivities(
-            intent,
-            PackageManager.MATCH_DEFAULT_ONLY,
-        ).isNotEmpty()
-    }.getOrDefault(false)
 }
