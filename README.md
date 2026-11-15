@@ -1,10 +1,8 @@
 # Video2Gif
 
-把手机视频转成无声 GIF 的安卓应用。先预览效果、估算体积，确认后才开始编码；所有处理在设备上完成，不需要账号或上传。
+换成安卓机失去iPhone的预设指令后就老是要去找在线转Gif的网站才能做表情包，下的apk又总是要插入广告或者要注册才能用。怒而自己开发之。
 
-界面为 Jetpack Compose + Material 3，视觉语言是「极光石墨 + 玻璃主卡片」：近黑青灰底、薄荷极光、竖向玻璃主卡片与几何装饰线。设计依据见 [DESIGN.md](DESIGN.md)，产品与技术约束见 [PRODUCT.md](PRODUCT.md) 与 [ARCHITECTURE.md](ARCHITECTURE.md)。当前实现状态、偏差与验收证据见 [DEVELOPMENT.md](DEVELOPMENT.md)。
-
-<img src="docs/screenshots/home-dark.jpg" width="240" alt="首页空状态（深色）"/> <img src="docs/screenshots/editor-dark.jpg" width="240" alt="调整工作区"/> <img src="docs/screenshots/batch-dark.jpg" width="240" alt="批次汇总"/>
+做都做了索性就做得好看一点，所以这是一个还算好看的视频转Gif应用。界面为 Jetpack Compose + Material 3。为什么用Kotlin因为我上次写Kotlin还是若干年前突然想复健一下（突然老气横秋的语气！）
 
 ## 已实现
 
@@ -16,28 +14,6 @@
 - **批次**：逐项覆盖、统一参数、单独设置标记、错误项阻止整批开始、串行前台服务、通知进度、取消当前/全部、失败项保留原因并重试。
 - **设置与任务恢复**：DataStore 保存设置，SharedPreferences 同步保存带版本的转换任务与发布检查点；进程中断后未完成项标记为“已中断”，已完成文件保留。首页始终选择新视频，不保存或恢复上次编辑。
 - **主题与适配**：跟随系统/浅色/深色；Android 12+ 可选的壁纸配色；平板或宽窗口切为左侧预览、右侧参数；手机横屏仍可滚动使用；触控目标、数值输入与主要 TalkBack 描述已加入。
-
-## 截图
-
-| 调整（深色） | 调整（浅色） | 转换进度 |
-|---|---|---|---|
-| <img src="docs/screenshots/editor-dark.jpg" width="240"/> | <img src="docs/screenshots/editor-light.jpg" width="240"/> | <img src="docs/screenshots/progress-dark.jpg" width="240"/> |
-
-| 结果 | 设置（深色） | 首页（浅色） |
-|---|---|---|
-| <img src="docs/screenshots/result-dark.jpg" width="240"/> | <img src="docs/screenshots/settings-dark.jpg" width="240"/> | <img src="docs/screenshots/home-light.jpg" width="240"/> |
-
-## 构建
-
-环境：JDK 25、Android SDK 37、Gradle Wrapper 9.6.0、AGP 9.5.0、Kotlin 2.2.10（本次构建使用 Android Studio 自带 JBR 25，可用 `JAVA_HOME=/opt/android-studio/jbr ./gradlew ...`）。`minSdk = 24`、`compileSdk/targetSdk = 37`。
-
-```bash
-./gradlew :app:assembleDebug
-./gradlew :app:testDebugUnitTest
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-本地测试覆盖 LZW 往返、差分帧合成、延迟合并、取消/存储故障和 JSON 迁移；设备回归入口见 [docs/DEVICE_VALIDATION.md](docs/DEVICE_VALIDATION.md)。
 
 ## 代码结构
 
@@ -52,10 +28,3 @@ app/src/main/java/com/example/video2gif/
 ```
 
 `media/` 中预览、估算与导出共用 `PaletteBuilder`、`ColorPalette`、`mapToIndices` 与采样时间表；编码器只由转换引擎持有。没有原生 `.so` 依赖，便于审查和构建。
-
-## 边界
-
-- 新解码路径对 HDR 请求平台 SDR 色调映射并检查是否接受；不支持时返回错误，设备颜色正确性仍需验证。
-- 预览与导出已迁移到 `MediaExtractor + MediaCodec`，使用两帧缓存；设备上的颜色、内存与性能验收待完成。元信息和缩略图继续使用 `MediaMetadataRetriever`。
-- 原真实素材验证已由用户完成；本轮帧优化改变了输出大小，新路径的估算误差尚需用已有独立集复核。
-- 环境与验证记录、已知问题见 [DEVELOPMENT.md](DEVELOPMENT.md)。
