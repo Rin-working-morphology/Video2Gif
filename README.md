@@ -2,24 +2,11 @@
 
 换成安卓机失去iPhone的预设指令后就老是要去找在线转Gif的网站才能做表情包，下的apk又总是要插入广告或者要注册才能用。怒而自己开发之。
 
-做都做了索性就做得好看一点，所以这是一个还算好看的视频转Gif应用。界面为 Jetpack Compose + Material 3。为什么用Kotlin因为我上次写Kotlin还是若干年前突然想复健一下（突然老气横秋的语气！）
+做都做了索性就做得好看一点，所以这是一个还算好看的视频转Gif应用。界面为 Jetpack Compose + Material 3。为什么用Kotlin因为我上次写Kotlin还是若干年前突然想复健一下（突然老气横秋！）
 
 ## 下载
 
 正式版从 [GitHub Releases](https://github.com/Rin-working-morphology/Video2Gif/releases/latest) 下载 `Video2Gif-<版本>.apk`。
-
-- 推送 `v*` 标签后由 GitHub Actions 自动构建签名 APK 并发 Release，同一次发布还会上传 `latest.json`。
-- 设置 → 关于 → 检查更新会读取 `releases/latest/download/latest.json`，比较 `versionCode` 后提示是否有新版本；确认后用浏览器打开 Release 页面下载。
-- 首次从本地调试版切换到正式版需要卸载重装（签名不同）；之后正式版之间可以直接覆盖升级。
-
-发版只需打标签：
-
-```bash
-git tag v1.0.1
-git push origin v1.0.1
-```
-
-工作流会构建签名 APK、生成 `latest.json` 并发布 Release。签名 keystore 保存在维护者本机的 `~/.local/share/video2gif/`，对应的仓库 Secrets 以 `SIGNING_` 开头；换机时必须沿用同一份 keystore，否则已安装的旧版无法覆盖升级。
 
 ## 已实现
 
